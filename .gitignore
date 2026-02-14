@@ -1,0 +1,8 @@
+node_modules/
+audit.jsonl
+.rate-limit-state.json
+.rate-limit-state.json.lock
+policy.json
+transpile.js
+scripts/*.js
+!scripts/*.ts

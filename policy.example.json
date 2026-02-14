@@ -1,0 +1,66 @@
+{
+  "allowedTools": {
+    "Read": {
+      "roles": ["default", "admin"],
+      "maxArgsLength": 5000,
+      "description": "Read file contents"
+    },
+    "Write": {
+      "roles": ["admin"],
+      "maxArgsLength": 50000,
+      "description": "Write file contents — admin only"
+    },
+    "Bash": {
+      "roles": ["admin"],
+      "maxArgsLength": 2000,
+      "description": "Execute shell commands — admin only, inspect carefully"
+    },
+    "WebSearch": {
+      "roles": ["default", "admin"],
+      "maxArgsLength": 1000,
+      "description": "Search the web"
+    },
+    "WebFetch": {
+      "roles": ["default", "admin"],
+      "maxArgsLength": 2000,
+      "description": "Fetch web content"
+    }
+  },
+  "rateLimits": {
+    "perUser": {
+      "maxCalls": 100,
+      "windowSeconds": 3600
+    },
+    "perSession": {
+      "maxCalls": 30,
+      "windowSeconds": 300
+    }
+  },
+  "identityMap": {
+    "#general": {
+      "userId": "team-general",
+      "roles": ["default"]
+    },
+    "#engineering": {
+      "userId": "team-engineering",
+      "roles": ["default", "admin"]
+    },
+    "david": {
+      "userId": "david-crowe",
+      "roles": ["admin"]
+    },
+    "guest": {
+      "userId": "guest-user",
+      "roles": ["default"]
+    }
+  },
+  "injectionDetection": {
+    "enabled": true,
+    "sensitivity": "medium",
+    "customPatterns": []
+  },
+  "auditLog": {
+    "path": "audit.jsonl",
+    "maxFileSizeMB": 100
+  }
+}
