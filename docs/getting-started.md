@@ -14,11 +14,9 @@ If you just want to install and start using it:
 
 ```bash
 openclaw plugins install @gatewaystack/gatewaystack-governance
-cp ~/.openclaw/plugins/gatewaystack-governance/policy.example.json \
-   ~/.openclaw/plugins/gatewaystack-governance/policy.json
 ```
 
-Then skip to [Step 5: Install as a plugin](#step-5-install-as-a-plugin) to verify it loaded, and [Step 6](#step-6-configure-your-policy) to customize your policy.
+That's it — governance is active immediately with sensible defaults. To customize, skip to [Step 6: Configure your policy](#step-6-configure-your-policy).
 
 ---
 

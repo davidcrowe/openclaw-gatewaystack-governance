@@ -6,6 +6,7 @@ import * as path from "path";
 
 export const SKILL_DIR = path.resolve(__dirname, "..", "..");
 export const DEFAULT_POLICY_PATH = path.join(SKILL_DIR, "policy.json");
+export const DEFAULT_EXAMPLE_POLICY_PATH = path.join(SKILL_DIR, "policy.example.json");
 export const DEFAULT_AUDIT_PATH = path.join(SKILL_DIR, "audit.jsonl");
 export const RATE_LIMIT_STATE_PATH = path.join(SKILL_DIR, ".rate-limit-state.json");
 
