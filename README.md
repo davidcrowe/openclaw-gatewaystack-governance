@@ -196,7 +196,7 @@ The `policy.json` file controls everything. Here's a complete working example â€
 - **Rate limits** cap any single user at 100 calls per hour and 30 calls per 5-minute session.
 - **Injection detection** at medium sensitivity catches instruction injection, credential exfiltration, reverse shells, role impersonation, and sensitive file access patterns.
 
-See `references/policy-reference.md` for the full schema including custom injection patterns, audit log format, and sensitivity level details.
+See [references/policy-reference.md](references/policy-reference.md) for the full schema including custom injection patterns, audit log format, and sensitivity level details.
 
 ## Self-test
 
