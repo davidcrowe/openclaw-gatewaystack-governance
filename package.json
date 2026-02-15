@@ -9,9 +9,20 @@
     "url": "https://github.com/davidcrowe/openclaw-gatewaystack-skill"
   },
   "main": "scripts/governance-gateway.js",
+  "bin": {
+    "gatewaystack-governance": "scripts/governance-gateway.js"
+  },
+  "files": [
+    "scripts/governance-gateway.js",
+    "scripts/governance-gateway.ts",
+    "policy.example.json",
+    "SKILL.md",
+    "references/"
+  ],
   "scripts": {
     "build": "tsc",
-    "test": "node scripts/governance-gateway.js --action self-test"
+    "test": "npm run build && node scripts/governance-gateway.js --action self-test",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "minimist": "^1.2.8"

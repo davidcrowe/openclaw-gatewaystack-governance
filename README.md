@@ -1,10 +1,12 @@
 # GatewayStack Governance Skill for OpenClaw
 
-A deny-by-default governance layer that wraps every OpenClaw tool call with identity verification, scope enforcement, rate limiting, prompt injection detection, and audit logging.
+OpenClaw gives you tool-level access control — allow/deny lists that decide which tools an agent can call. That's one layer. This skill adds the five that are missing: identity mapping, role-based scope, rate limiting, prompt injection detection, and audit logging.
+
+This is a lightweight preview of [GatewayStack](https://github.com/davidcrowe/GatewayStack)'s six governance capabilities, packaged as a single OpenClaw skill.
 
 ## Why this exists
 
-OpenClaw has no built-in identity layer, no scope enforcement, no content inspection, and no audit trail. Published security research documents the consequences:
+OpenClaw's built-in tool policies control *which* tools run. They don't answer: *who* is calling, *what's* in the arguments, *how often* are they calling, and *where's the record*? Published security research shows why that matters:
 
 | Vulnerability | Source | What's missing |
 |---|---|---|
@@ -15,11 +17,19 @@ OpenClaw has no built-in identity layer, no scope enforcement, no content inspec
 | 135,000+ instances exposed to internet | [The Register](https://www.theregister.com/2026/02/09/openclaw_instances_exposed_vibe_code/) | Network security, audit logging |
 | Shadow AI: hundreds of unmanaged agents in enterprises | [Bitdefender](https://www.bitdefender.com/en-us/blog/labs/helpful-skills-or-hidden-payloads-bitdefender-labs-dives-deep-into-the-openclaw-malicious-skill-trap) | Centralized governance, visibility |
 
-This skill doesn't fix OpenClaw's architecture. It adds the governance layer that's missing.
+This skill layers on top of OpenClaw's native tool policies. It doesn't replace them — it adds the governance they don't cover.
 
-## What it does
+## What OpenClaw does vs. what this adds
 
-Every tool call passes through five checks before execution:
+| Layer | OpenClaw built-in | This skill |
+|---|---|---|
+| **Tool access** | Allow/deny lists per agent | Role-based allowlist per user |
+| **Identity** | Per-agent config | User/channel → identity mapping with roles |
+| **Argument inspection** | None | 40+ injection patterns from published research |
+| **Rate limiting** | None | Per-user and per-session sliding window |
+| **Audit trail** | None | Append-only JSONL with full context |
+
+## The five checks
 
 1. **Identity verification** — resolves the calling user/channel to a governance identity. Unmapped identities are blocked.
 2. **Scope enforcement** — checks the tool against a deny-by-default allowlist. Unconfigured tools are blocked. Role-based access control per tool.
@@ -50,46 +60,104 @@ cp policy.example.json policy.json
 npm test
 ```
 
-## Configure
+## Quick-start: configure your policy
 
-Edit `policy.json`:
+After install, you need to tell the skill who your users are and what they're allowed to do. This takes about 2 minutes.
 
-**Important:** `policy.json` contains your access control config. Restrict permissions:
+### Step 1: Create your policy file
+
 ```bash
-chmod 600 policy.json
+cp policy.example.json policy.json
+chmod 600 policy.json   # restrict access — this is your security config
 ```
 
-**1. Identity map** — map your OpenClaw channels and users to governance identities:
+### Step 2: Add your users
+
+Open `policy.json` and find the `identityMap` section. Replace the example users with your actual OpenClaw users and channels.
+
+**Find your OpenClaw username:** this is the identifier your OpenClaw instance uses for the current user. Check your OpenClaw config or run a test call to see what value gets passed as `--user`.
+
 ```json
-{
-  "identityMap": {
-    "#team-channel": { "userId": "team-ops", "roles": ["default"] },
-    "your-username": { "userId": "your-name", "roles": ["admin"] }
-  }
+"identityMap": {
+    "your-openclaw-username": {
+        "userId": "your-name",
+        "roles": ["admin"]
+    },
+    "teammate-username": {
+        "userId": "teammate",
+        "roles": ["default"]
+    },
+    "#your-team-channel": {
+        "userId": "team-name",
+        "roles": ["default"]
+    }
 }
 ```
 
-**2. Tool allowlist** — explicitly allow tools (everything else is blocked):
+**Roles** control what each user can do (see Step 3). Use `"admin"` for trusted users who need full tool access. Use `"default"` for everyone else.
+
+Anyone **not** in this list is blocked entirely. That's the point — deny-by-default.
+
+### Step 3: Choose which tools to allow
+
+Find the `allowedTools` section. Each tool listed here is available; everything else is blocked.
+
 ```json
-{
-  "allowedTools": {
-    "Read": { "roles": ["default", "admin"], "maxArgsLength": 5000 },
-    "Bash": { "roles": ["admin"], "maxArgsLength": 2000 }
-  }
+"allowedTools": {
+    "Read": {
+        "roles": ["default", "admin"],
+        "maxArgsLength": 5000,
+        "description": "Read file contents"
+    },
+    "Bash": {
+        "roles": ["admin"],
+        "maxArgsLength": 2000,
+        "description": "Shell commands — admin only"
+    },
+    "Write": {
+        "roles": ["admin"],
+        "maxArgsLength": 50000,
+        "description": "Write files — admin only"
+    }
 }
 ```
 
-**3. Rate limits** — set per-user and per-session limits:
+**How to decide:**
+- Tools that only read data (Read, WebSearch) → safe for `["default", "admin"]`
+- Tools that modify your system (Bash, Write) → restrict to `["admin"]`
+- Tools you never want an agent to use → leave them out entirely (blocked by default)
+
+### Step 4: Set rate limits
+
+The defaults are reasonable for most setups. Adjust if needed:
+
 ```json
-{
-  "rateLimits": {
-    "perUser": { "maxCalls": 100, "windowSeconds": 3600 },
-    "perSession": { "maxCalls": 30, "windowSeconds": 300 }
-  }
+"rateLimits": {
+    "perUser":    { "maxCalls": 100, "windowSeconds": 3600 },
+    "perSession": { "maxCalls": 30,  "windowSeconds": 300  }
 }
 ```
 
-See `references/policy-reference.md` for the full schema.
+This means: 100 calls per user per hour, 30 calls per session per 5 minutes. If an agent goes haywire, it gets throttled.
+
+### Step 5: Verify it works
+
+```bash
+npm test
+```
+
+All 13 checks should pass. If any fail, the output tells you exactly what's misconfigured.
+
+### Common setup mistakes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Every user gets blocked | Your usernames don't match what OpenClaw passes | Run a test call and check what `--user` value the agent sends, then add that exact string to `identityMap` |
+| A tool you need is blocked | Tool isn't in `allowedTools` | Add it to the allowlist with the appropriate roles |
+| Admin user can't access a tool | Role mismatch | Check that the user's roles in `identityMap` include a role listed in the tool's `roles` array |
+| Rate limit errors on first call | Stale state file | Delete `.rate-limit-state.json` and retry |
+
+For the full policy schema, see `references/policy-reference.md`.
 
 ## Verify
 
@@ -136,17 +204,41 @@ Check the audit log:
 cat audit.jsonl | jq .
 ```
 
+## How this relates to OpenClaw's tool policies
+
+OpenClaw already has process-level tool allow/deny (`tools.allow`, `tools.deny` in `openclaw.json`). That's real enforcement — the agent can't bypass it. Use it.
+
+This skill adds what tool policies don't cover:
+- **Who** is calling (identity mapping with roles — OpenClaw policies are per-agent, not per-user)
+- **What's in the arguments** (injection detection — OpenClaw blocks tools, not payloads)
+- **How often** (rate limiting — no native throttling per user/session)
+- **What happened** (audit trail — no native structured logging)
+
+Use OpenClaw's tool policies for hard enforcement. Use this skill for visibility, argument inspection, identity, and audit.
+
 ## Limitations
 
-This skill mitigates risk — it does not eliminate it. Read these before deciding what this covers.
+- **Skill-layer governance.** This runs as a skill, not a process-level hook. OpenClaw's `before_tool_call` hook is not yet shipped. When it is, this skill can register as a real pre-execution gate. Until then, the audit log and injection testing work standalone, but enforcement depends on the agent following SKILL.md instructions.
+- **Identity is self-asserted.** The `--user` and `--channel` values come from whatever the agent passes. No cryptographic authentication — that requires JWT/OIDC, which is what `@gatewaystack/identifiabl` provides in the full GatewayStack.
+- **Injection detection is regex-only.** 40+ patterns from published research catch known attacks. They can't catch novel or obfuscated patterns. Defense in depth, not a perimeter.
+- **Local enforcement only.** Single instance. For centralized policy across multiple instances, see [AgenticControlPlane](https://agenticcontrolplane.com).
 
-- **Enforcement is prompt-level, not runtime-level.** The SKILL.md instructs the agent to run governance checks before tool calls. There is no process-level hook — OpenClaw's skill architecture doesn't expose one. A sufficiently manipulated agent, or a malicious skill that doesn't load this one, can skip the check. This is the fundamental constraint of any skill-layer governance.
-- **Identity is self-asserted.** The `--user` and `--channel` values come from whatever the agent passes. There's no cryptographic authentication at this layer — that requires JWT/OIDC verification against an IdP, which is what `@gatewaystack/identifiabl` does in the full GatewayStack. The skill-level identity map is a stepping stone: it enforces deny-by-default for unmapped users and provides role-based scope, but it doesn't authenticate.
-- **Injection detection is regex-only.** Patterns catch known attack signatures (reverse shells, credential exfiltration, instruction injection) from published research. They cannot detect novel, obfuscated, or semantically equivalent attacks. Unicode homoglyphs, character splitting, and indirect phrasing will bypass regex. This is defense in depth, not a perimeter.
-- **Local enforcement only.** This skill runs on a single OpenClaw instance. For centralized policy management across multiple instances, see [AgentiControlPlane](https://agenticcontrolplane.com).
-- **No network-level protection.** This skill operates at the tool-call level. You still need to bind OpenClaw to `127.0.0.1` (not `0.0.0.0`) and use proper network security.
+The most valuable piece regardless: the **audit log**. A structured record of every tool invocation with identity context is useful for incident response and compliance whether or not the other checks are enforced.
 
-The most valuable piece regardless of these constraints: the **audit log**. Even when other checks can be circumvented, a structured record of every tool invocation with identity context is genuinely useful for incident response and compliance visibility.
+## Growing beyond this skill
+
+This skill is the right starting point. When you hit its limits, each one maps to a GatewayStack capability:
+
+| This skill | Limitation | GatewayStack / AgenticControlPlane |
+|---|---|---|
+| `--user "david"` self-asserted identity | Agent can lie about who it is | **identifiabl** — JWT/OIDC verification against your IdP. Cryptographic proof of identity on every request. |
+| File-based rate limiting | Single instance only, no cross-instance coordination | **limitabl** — Firestore-backed rate limits, budget caps, and agent guards across all instances. |
+| Regex injection detection | Cannot catch novel or obfuscated attacks | **transformabl** — PII detection, content classification, and ML-assisted content scanning. |
+| Local `policy.json` | Manual editing, no centralized management | **AgenticControlPlane** — manage policies across all your OpenClaw instances from a single dashboard. Push policy changes without restarting agents. |
+| JSONL audit log on disk | Local file, no search, no alerting | **explicabl** — structured audit logging to Firestore with search, filtering, webhook alerts, and compliance exports. |
+| Skill-layer enforcement only | Malicious skill can skip the check | **GatewayStack MCP Gateway** — all tool calls route through a gateway with process-level enforcement. No tool executes without passing governance. |
+
+The migration path: install this skill today, get visibility into what your agents are doing, then upgrade to [GatewayStack](https://github.com/davidcrowe/GatewayStack) (self-hosted) or [AgenticControlPlane](https://agenticcontrolplane.com) (managed) when you need production-grade controls.
 
 ## Learn more
 
