@@ -20,6 +20,12 @@ It hooks into OpenClaw at the process level and enforces five governance checks 
 
 > **New to OpenClaw?** [OpenClaw](https://github.com/openclaw/openclaw) is an open-source framework for building personal AI agents that use tools — file access, shell commands, web search, and more. Tools are powerful, which is exactly why they need governance.
 
+```bash
+openclaw plugins install @gatewaystack/gatewaystack-governance
+```
+
+One command. Zero config. Governance is active on every tool call immediately.
+
 **Contents:** [The threat is real](#the-threat-is-real) · [Why skills aren't enough](#why-skills-arent-enough) · [How it protects you](#how-it-protects-you) · [See it block an attack](#see-it-block-an-attack) · [Get started](#get-started) · [Configure your policy](#configure-your-policy)
 
 ## The threat is real
@@ -47,16 +53,15 @@ This wasn't a fluke or a prompt engineering problem. It's an architecture issue:
 
 ## How it protects you
 
-```mermaid
-flowchart LR
-    A[Tool call] --> B[Identity]
-    B --> C[Scope]
-    C --> D[Rate limit]
-    D --> E[Injection scan]
-    E --> F[Audit log]
-    F --> G{Pass?}
-    G -- Yes --> H[Tool executes]
-    G -- No --> I[Blocked + reason]
+```
+Tool call → Identity → Scope → Rate limit → Injection scan → Audit log
+                                                                  ↓
+                                                          ┌───────┴───────┐
+                                                          │  All passed?  │
+                                                          └───┬───────┬───┘
+                                                           Yes│       │No
+                                                              ↓       ↓
+                                                        Tool runs   Blocked
 ```
 
 Every tool call passes through five checks, in order:
@@ -195,7 +200,7 @@ See `references/policy-reference.md` for the full schema including custom inject
 
 ```bash
 npm test    # 14 built-in checks
-npm run test:unit   # 85 vitest unit tests
+npm run test:unit   # 87 vitest unit tests
 ```
 
 ## Going further with GatewayStack
@@ -205,6 +210,20 @@ This plugin governs what happens **on the machine** — local tools like `read`,
 If your agents also connect to external services (GitHub, Slack, Salesforce, APIs), **[GatewayStack](https://github.com/davidcrowe/GatewayStack)** adds the same kind of governance to those connections — JWT-verified identity, policy, and governance across all your integrations.
 
 This plugin is fully standalone. GatewayStack is optional, for teams that need governance beyond the local machine. [AgenticControlPlane](https://agenticcontrolplane.com) is the managed commercial version — hosted infrastructure, dashboard, and support.
+
+## Contributing
+
+Issues and pull requests are welcome. If you find a bypass, a false positive, or want to add injection patterns — [open an issue](https://github.com/davidcrowe/openclaw-gatewaystack-governance/issues).
+
+To develop locally:
+
+```bash
+git clone https://github.com/davidcrowe/openclaw-gatewaystack-governance.git
+cd openclaw-gatewaystack-governance
+npm install && npm run build
+cp policy.example.json policy.json
+npm run test:all                        # vitest + self-test
+```
 
 ## License
 
