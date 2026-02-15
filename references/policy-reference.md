@@ -41,20 +41,23 @@ A map of tool names to their access policies. **Deny-by-default**: any tool not 
 
 ### `identityMap` (required)
 
-Maps OpenClaw channels, usernames, or identifiers to governance identities.
+Maps OpenClaw agent IDs to governance identities. Since OpenClaw is a single-user personal AI, the identity map governs *agents* (e.g. "main", "ops", "dev"), not human users.
 
 ```json
 {
   "identityMap": {
-    "#general": { "userId": "team-general", "roles": ["default"] },
-    "david": { "userId": "david-crowe", "roles": ["admin"] }
+    "main": { "userId": "agent-main", "roles": ["admin"] },
+    "ops": { "userId": "agent-ops", "roles": ["default"] },
+    "dev": { "userId": "agent-dev", "roles": ["default", "admin"] },
+    "unknown": { "userId": "unknown-agent", "roles": ["default"] }
   }
 }
 ```
 
-- Keys can be channel names (prefixed with `#`), usernames, or any identifier passed via `--channel` or `--user`
+- Keys are agent IDs as reported by `ctx.agentId` in plugin mode, or passed via `--user` in CLI mode
 - `userId` — the canonical identity for audit logging and rate limiting
 - `roles` — governs which tools this identity can access
+- The `"unknown"` entry is a catch-all for unrecognized agents
 
 ### `injectionDetection` (required)
 
@@ -95,21 +98,20 @@ Each line in `audit.jsonl` is a JSON object:
 
 ```json
 {
-  "timestamp": "2026-02-12T10:30:00.000Z",
-  "requestId": "gov-1707734400000-a1b2c3d4",
+  "timestamp": "2026-02-15T03:36:05.750Z",
+  "requestId": "gov-1771126565749-691394d0",
   "action": "tool-check",
-  "tool": "Bash",
-  "user": "david",
-  "resolvedIdentity": "david-crowe",
+  "tool": "read",
+  "user": "main",
+  "resolvedIdentity": "agent-main",
   "roles": ["admin"],
-  "channel": "#engineering",
-  "session": "sess-abc123",
+  "session": "agent:main:main",
   "allowed": true,
   "reason": "All governance checks passed",
   "checks": {
-    "identity": { "passed": true, "detail": "Mapped david → david-crowe" },
-    "scope": { "passed": true, "detail": "Tool Bash is allowlisted for admin" },
-    "rateLimit": { "passed": true, "detail": "Rate limit OK: 5/100 calls" },
+    "identity": { "passed": true, "detail": "Mapped main → agent-main with roles [admin]" },
+    "scope": { "passed": true, "detail": "Tool \"read\" is allowlisted for roles [admin]" },
+    "rateLimit": { "passed": true, "detail": "Rate limit OK: 1/100 calls in window" },
     "injection": { "passed": true, "detail": "No injection patterns detected" }
   }
 }

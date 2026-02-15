@@ -7,23 +7,28 @@ metadata: { "openclaw": { "emoji": "🛡️", "requires": { "bins": ["node"] }, 
 
 # GatewayStack Governance Skill
 
+> **Recommended: Use plugin mode instead.** Install as an OpenClaw plugin for automatic governance on every tool call — no manual invocation needed. See the README for plugin installation instructions.
+
 This skill adds an identity-aware governance layer to every tool call in your OpenClaw instance. It intercepts outbound tool invocations before execution and applies five security checks:
 
-1. **Identity verification** — validates which user/channel initiated the request
+1. **Identity verification** — validates which agent/user initiated the request
 2. **Scope enforcement** — checks the tool call against a deny-by-default allowlist
 3. **Rate limiting** — enforces per-user, per-session call limits
 4. **Prompt injection detection** — blocks known attack patterns in tool arguments
 5. **Audit logging** — writes every tool invocation with full identity context
 
-## When to use this skill
+## Plugin mode vs Skill mode
 
-This skill should be active on ALL tool calls. It acts as a governance checkpoint between the user's request and the actual tool execution.
+| | Plugin mode | Skill mode |
+|---|---|---|
+| **How it works** | Hooks into `before_tool_call` at the process level | Relies on the LLM voluntarily calling the check |
+| **Bypass-proof** | Yes — runs before any tool executes | No — the agent can skip the check |
+| **Setup** | Install plugin, copy policy, restart gateway | Clone repo, copy policy |
+| **Invocation** | Automatic on every tool call | Manual or via SKILL.md instructions |
 
-When the user asks to execute any tool or skill, ALWAYS run the governance check first by invoking the governance gateway script before the actual tool execution.
+## Skill mode usage (fallback)
 
-## How it works
-
-Before executing any tool call, run the governance check:
+If you're using this as a skill (not a plugin), the governance check should run before every tool call:
 
 ```bash
 node ~/.openclaw/skills/gatewaystack-governance/scripts/governance-gateway.js \
@@ -51,11 +56,11 @@ node ~/.openclaw/skills/gatewaystack-governance/scripts/governance-gateway.js \
 
 ## Configuration
 
-The governance policy lives in `~/.openclaw/skills/gatewaystack-governance/policy.json`. Edit this file to:
+The governance policy lives in `policy.json` (next to this file). Edit it to:
 
 - Add tools to the allowlist (deny-by-default — unconfigured tools are blocked)
 - Set rate limits per user/session
-- Configure identity mapping (openclaw channels → governance identities)
+- Configure identity mapping (agents/channels → governance identities)
 - Adjust injection detection sensitivity
 
 See `references/policy-reference.md` for the full policy schema.
@@ -72,5 +77,5 @@ See `references/policy-reference.md` for the full policy schema.
 cd ~/.openclaw/skills/gatewaystack-governance
 npm install
 cp policy.example.json policy.json
-# Edit policy.json to configure your allowlist
+# Edit policy.json to configure your allowlist and identity map
 ```

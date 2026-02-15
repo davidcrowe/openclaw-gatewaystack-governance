@@ -1,6 +1,6 @@
 {
-  "name": "@gatewaystack/openclaw-governance-skill",
-  "version": "0.1.0",
+  "name": "@gatewaystack/gatewaystack-governance",
+  "version": "1.0.0",
   "description": "GatewayStack governance layer for OpenClaw — identity, scope, rate limiting, injection detection, and audit logging for every tool call",
   "license": "MIT",
   "author": "David Crowe <david@reducibl.com>",
@@ -12,11 +12,20 @@
   "bin": {
     "gatewaystack-governance": "scripts/governance-gateway.js"
   },
+  "openclaw": {
+    "extensions": ["./src/plugin.js"]
+  },
   "files": [
     "scripts/governance-gateway.js",
+    "scripts/governance-gateway.d.ts",
     "scripts/governance-gateway.ts",
+    "src/plugin.js",
+    "src/plugin.d.ts",
+    "src/plugin.ts",
+    "openclaw.plugin.json",
     "policy.example.json",
     "SKILL.md",
+    "README.md",
     "references/"
   ],
   "scripts": {
@@ -37,6 +46,7 @@
   },
   "keywords": [
     "openclaw",
+    "openclaw-plugin",
     "gatewaystack",
     "governance",
     "security",

@@ -20,7 +20,7 @@ import * as crypto from "crypto";
 // Types
 // ---------------------------------------------------------------------------
 
-interface Policy {
+export interface Policy {
   allowedTools: Record<
     string,
     {
@@ -55,6 +55,15 @@ interface GovernanceRequest {
   requestId?: string;
   result?: string;
   output?: string;
+}
+
+export interface GovernanceCheckResult {
+  allowed: boolean;
+  reason?: string;
+  requestId: string;
+  identity?: string;
+  roles?: string[];
+  patterns?: string[];
 }
 
 interface AuditEntry {
@@ -151,7 +160,7 @@ const INJECTION_PATTERNS_LOW: RegExp[] = [
 // ---------------------------------------------------------------------------
 
 const SKILL_DIR = path.dirname(path.dirname(__filename));
-const POLICY_PATH = path.join(SKILL_DIR, "policy.json");
+const DEFAULT_POLICY_PATH = path.join(SKILL_DIR, "policy.json");
 const DEFAULT_AUDIT_PATH = path.join(SKILL_DIR, "audit.jsonl");
 const RATE_LIMIT_STATE_PATH = path.join(SKILL_DIR, ".rate-limit-state.json");
 
@@ -159,19 +168,14 @@ const RATE_LIMIT_STATE_PATH = path.join(SKILL_DIR, ".rate-limit-state.json");
 // Policy loading
 // ---------------------------------------------------------------------------
 
-function loadPolicy(): Policy {
-  if (!fs.existsSync(POLICY_PATH)) {
-    console.error(
-      JSON.stringify({
-        allowed: false,
-        reason:
-          "Governance policy not found. Run: cp policy.example.json policy.json",
-        requestId: generateRequestId(),
-      })
+export function loadPolicy(policyPath?: string): Policy {
+  const resolvedPath = policyPath || DEFAULT_POLICY_PATH;
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(
+      `Governance policy not found at ${resolvedPath}. Run: cp policy.example.json policy.json`
     );
-    process.exit(1);
   }
-  return JSON.parse(fs.readFileSync(POLICY_PATH, "utf-8"));
+  return JSON.parse(fs.readFileSync(resolvedPath, "utf-8"));
 }
 
 function generateRequestId(): string {
@@ -502,38 +506,23 @@ function writeAuditLog(entry: AuditEntry, policy: Policy): void {
 }
 
 // ---------------------------------------------------------------------------
-// Main governance check
+// Core governance check — importable by plugin
 // ---------------------------------------------------------------------------
 
-function runGovernanceCheck(req: GovernanceRequest): void {
-  const policy = loadPolicy();
+export async function checkGovernance(params: {
+  toolName: string;
+  args: string;
+  userId: string;
+  session?: string;
+  policyPath?: string;
+}): Promise<GovernanceCheckResult> {
+  const policy = loadPolicy(params.policyPath);
   const requestId = generateRequestId();
 
-  if (req.action === "self-test") {
-    runSelfTest(policy);
-    return;
-  }
-
-  if (req.action === "log-result") {
-    const entry: AuditEntry = {
-      timestamp: new Date().toISOString(),
-      requestId: req.requestId || requestId,
-      action: "tool-result",
-      result: req.result,
-      outputSummary: req.output
-        ? req.output.substring(0, 500)
-        : undefined,
-    };
-    writeAuditLog(entry, policy);
-    console.log(JSON.stringify({ logged: true, requestId: entry.requestId }));
-    return;
-  }
-
-  // Default action: check
   const checks: Record<string, { passed: boolean; detail: string }> = {};
 
   // 1. Identity verification
-  const identity = verifyIdentity(req.user, req.channel, policy);
+  const identity = verifyIdentity(params.userId, undefined, policy);
   checks["identity"] = {
     passed: identity.verified,
     detail: identity.detail,
@@ -544,63 +533,49 @@ function runGovernanceCheck(req: GovernanceRequest): void {
       timestamp: new Date().toISOString(),
       requestId,
       action: "tool-check",
-      tool: req.tool,
-      user: req.user,
-      channel: req.channel,
-      session: req.session,
+      tool: params.toolName,
+      user: params.userId,
+      session: params.session,
       allowed: false,
       reason: "Identity verification failed",
       checks,
     };
     writeAuditLog(entry, policy);
-    console.log(
-      JSON.stringify({
-        allowed: false,
-        reason: `Identity verification failed: ${identity.detail}`,
-        requestId,
-      })
-    );
-    return;
+    return {
+      allowed: false,
+      reason: `Identity verification failed: ${identity.detail}`,
+      requestId,
+    };
   }
 
   // 2. Scope enforcement
-  if (req.tool) {
-    const scope = checkScope(req.tool, identity.roles, policy);
-    checks["scope"] = { passed: scope.allowed, detail: scope.detail };
+  const scope = checkScope(params.toolName, identity.roles, policy);
+  checks["scope"] = { passed: scope.allowed, detail: scope.detail };
 
-    if (!scope.allowed) {
-      const entry: AuditEntry = {
-        timestamp: new Date().toISOString(),
-        requestId,
-        action: "tool-check",
-        tool: req.tool,
-        user: req.user,
-        resolvedIdentity: identity.userId,
-        roles: identity.roles,
-        channel: req.channel,
-        session: req.session,
-        allowed: false,
-        reason: "Scope check failed",
-        checks,
-      };
-      writeAuditLog(entry, policy);
-      console.log(
-        JSON.stringify({
-          allowed: false,
-          reason: `Scope check failed: ${scope.detail}`,
-          requestId,
-        })
-      );
-      return;
-    }
+  if (!scope.allowed) {
+    const entry: AuditEntry = {
+      timestamp: new Date().toISOString(),
+      requestId,
+      action: "tool-check",
+      tool: params.toolName,
+      user: params.userId,
+      resolvedIdentity: identity.userId,
+      roles: identity.roles,
+      session: params.session,
+      allowed: false,
+      reason: "Scope check failed",
+      checks,
+    };
+    writeAuditLog(entry, policy);
+    return {
+      allowed: false,
+      reason: `Scope check failed: ${scope.detail}`,
+      requestId,
+    };
   }
 
   // 3. Rate limiting
-  const rateLimit = checkRateLimit(
-    identity.userId,
-    req.session,
-    policy
-  );
+  const rateLimit = checkRateLimit(identity.userId, params.session, policy);
   checks["rateLimit"] = {
     passed: rateLimit.allowed,
     detail: rateLimit.detail,
@@ -611,30 +586,26 @@ function runGovernanceCheck(req: GovernanceRequest): void {
       timestamp: new Date().toISOString(),
       requestId,
       action: "tool-check",
-      tool: req.tool,
-      user: req.user,
+      tool: params.toolName,
+      user: params.userId,
       resolvedIdentity: identity.userId,
       roles: identity.roles,
-      channel: req.channel,
-      session: req.session,
+      session: params.session,
       allowed: false,
       reason: "Rate limit exceeded",
       checks,
     };
     writeAuditLog(entry, policy);
-    console.log(
-      JSON.stringify({
-        allowed: false,
-        reason: `Rate limit exceeded: ${rateLimit.detail}`,
-        requestId,
-      })
-    );
-    return;
+    return {
+      allowed: false,
+      reason: `Rate limit exceeded: ${rateLimit.detail}`,
+      requestId,
+    };
   }
 
   // 4. Injection detection
-  if (req.args) {
-    const injection = detectInjection(req.args, policy);
+  if (params.args) {
+    const injection = detectInjection(params.args, policy);
     checks["injection"] = {
       passed: injection.clean,
       detail: injection.clean
@@ -647,63 +618,53 @@ function runGovernanceCheck(req: GovernanceRequest): void {
         timestamp: new Date().toISOString(),
         requestId,
         action: "tool-check",
-        tool: req.tool,
-        user: req.user,
+        tool: params.toolName,
+        user: params.userId,
         resolvedIdentity: identity.userId,
         roles: identity.roles,
-        channel: req.channel,
-        session: req.session,
+        session: params.session,
         allowed: false,
         reason: "Prompt injection detected",
         checks,
       };
       writeAuditLog(entry, policy);
-      console.log(
-        JSON.stringify({
-          allowed: false,
-          reason: `Blocked: potential prompt injection detected in tool arguments. ${injection.matches.length} pattern(s) matched.`,
-          requestId,
-          patterns: injection.matches,
-        })
-      );
-      return;
+      return {
+        allowed: false,
+        reason: `Blocked: potential prompt injection detected in tool arguments. ${injection.matches.length} pattern(s) matched.`,
+        requestId,
+        patterns: injection.matches,
+      };
     }
 
     // Check args length
-    if (req.tool) {
-      const toolPolicy = policy.allowedTools[req.tool];
-      if (
-        toolPolicy?.maxArgsLength &&
-        req.args.length > toolPolicy.maxArgsLength
-      ) {
-        checks["argsLength"] = {
-          passed: false,
-          detail: `Args length ${req.args.length} exceeds limit ${toolPolicy.maxArgsLength}`,
-        };
-        const entry: AuditEntry = {
-          timestamp: new Date().toISOString(),
-          requestId,
-          action: "tool-check",
-          tool: req.tool,
-          user: req.user,
-          resolvedIdentity: identity.userId,
-          roles: identity.roles,
-          channel: req.channel,
-          session: req.session,
-          allowed: false,
-          reason: "Arguments too long",
-          checks,
-        };
-        writeAuditLog(entry, policy);
-        console.log(
-          JSON.stringify({
-            allowed: false,
-            reason: `Tool arguments exceed maximum length (${req.args.length} > ${toolPolicy.maxArgsLength})`,
-            requestId,
-          })
-        );
-        return;
-      }
+    const toolPolicy = policy.allowedTools[params.toolName];
+    if (
+      toolPolicy?.maxArgsLength &&
+      params.args.length > toolPolicy.maxArgsLength
+    ) {
+      checks["argsLength"] = {
+        passed: false,
+        detail: `Args length ${params.args.length} exceeds limit ${toolPolicy.maxArgsLength}`,
+      };
+      const entry: AuditEntry = {
+        timestamp: new Date().toISOString(),
+        requestId,
+        action: "tool-check",
+        tool: params.toolName,
+        user: params.userId,
+        resolvedIdentity: identity.userId,
+        roles: identity.roles,
+        session: params.session,
+        allowed: false,
+        reason: "Arguments too long",
+        checks,
+      };
+      writeAuditLog(entry, policy);
+      return {
+        allowed: false,
+        reason: `Tool arguments exceed maximum length (${params.args.length} > ${toolPolicy.maxArgsLength})`,
+        requestId,
+      };
     }
   }
 
@@ -712,26 +673,73 @@ function runGovernanceCheck(req: GovernanceRequest): void {
     timestamp: new Date().toISOString(),
     requestId,
     action: "tool-check",
-    tool: req.tool,
-    user: req.user,
+    tool: params.toolName,
+    user: params.userId,
     resolvedIdentity: identity.userId,
     roles: identity.roles,
-    channel: req.channel,
-    session: req.session,
+    session: params.session,
     allowed: true,
     reason: "All governance checks passed",
     checks,
   };
   writeAuditLog(entry, policy);
 
-  console.log(
-    JSON.stringify({
-      allowed: true,
-      requestId,
-      identity: identity.userId,
-      roles: identity.roles,
-    })
-  );
+  return {
+    allowed: true,
+    requestId,
+    identity: identity.userId,
+    roles: identity.roles,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CLI wrapper — backward-compatible entry point
+// ---------------------------------------------------------------------------
+
+function runGovernanceCheck(req: GovernanceRequest): void {
+  let policy: Policy;
+  try {
+    policy = loadPolicy();
+  } catch (e: any) {
+    console.log(
+      JSON.stringify({
+        allowed: false,
+        reason: e.message,
+        requestId: generateRequestId(),
+      })
+    );
+    process.exit(1);
+  }
+
+  if (req.action === "self-test") {
+    runSelfTest(policy);
+    return;
+  }
+
+  if (req.action === "log-result") {
+    const auditEntry: AuditEntry = {
+      timestamp: new Date().toISOString(),
+      requestId: req.requestId || generateRequestId(),
+      action: "tool-result",
+      result: req.result,
+      outputSummary: req.output
+        ? req.output.substring(0, 500)
+        : undefined,
+    };
+    writeAuditLog(auditEntry, policy);
+    console.log(JSON.stringify({ logged: true, requestId: auditEntry.requestId }));
+    return;
+  }
+
+  // Default action: check — delegate to the shared core function
+  checkGovernance({
+    toolName: req.tool || "unknown",
+    args: req.args || "",
+    userId: req.user || req.channel || "unknown",
+    session: req.session,
+  }).then((result) => {
+    console.log(JSON.stringify(result));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -825,7 +833,7 @@ function runSelfTest(policy: Policy): void {
   });
 
   test("Identity: allows mapped users", () => {
-    const result = verifyIdentity("david", undefined, policy);
+    const result = verifyIdentity("main", undefined, policy);
     return result.verified && result.roles.includes("admin");
   });
 
@@ -883,8 +891,14 @@ function parseArgs(argv: string[]): GovernanceRequest {
 }
 
 // ---------------------------------------------------------------------------
-// Entry point
+// Entry point — only runs when executed directly (not imported)
 // ---------------------------------------------------------------------------
 
-const request = parseArgs(process.argv);
-runGovernanceCheck(request);
+const isDirectExecution =
+  require.main === module ||
+  process.argv[1]?.endsWith("governance-gateway.js");
+
+if (isDirectExecution) {
+  const request = parseArgs(process.argv);
+  runGovernanceCheck(request);
+}

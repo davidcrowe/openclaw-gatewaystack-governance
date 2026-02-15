@@ -1,29 +1,44 @@
 {
   "allowedTools": {
-    "Read": {
+    "read": {
       "roles": ["default", "admin"],
       "maxArgsLength": 5000,
       "description": "Read file contents"
     },
-    "Write": {
+    "write": {
       "roles": ["admin"],
       "maxArgsLength": 50000,
       "description": "Write file contents — admin only"
     },
-    "Bash": {
+    "exec": {
       "roles": ["admin"],
       "maxArgsLength": 2000,
-      "description": "Execute shell commands — admin only, inspect carefully"
+      "description": "Execute shell commands — admin only"
     },
-    "WebSearch": {
+    "gateway": {
+      "roles": ["default", "admin"],
+      "maxArgsLength": 5000,
+      "description": "OpenClaw gateway internal tool"
+    },
+    "web_search": {
       "roles": ["default", "admin"],
       "maxArgsLength": 1000,
       "description": "Search the web"
     },
-    "WebFetch": {
+    "web_fetch": {
       "roles": ["default", "admin"],
       "maxArgsLength": 2000,
       "description": "Fetch web content"
+    },
+    "memory_search": {
+      "roles": ["default", "admin"],
+      "maxArgsLength": 2000,
+      "description": "Search memory"
+    },
+    "memory_add": {
+      "roles": ["default", "admin"],
+      "maxArgsLength": 5000,
+      "description": "Add to memory"
     }
   },
   "rateLimits": {
@@ -37,20 +52,20 @@
     }
   },
   "identityMap": {
-    "#general": {
-      "userId": "team-general",
-      "roles": ["default"]
-    },
-    "#engineering": {
-      "userId": "team-engineering",
-      "roles": ["default", "admin"]
-    },
-    "david": {
-      "userId": "david-crowe",
+    "main": {
+      "userId": "agent-main",
       "roles": ["admin"]
     },
-    "guest": {
-      "userId": "guest-user",
+    "dev": {
+      "userId": "agent-dev",
+      "roles": ["default", "admin"]
+    },
+    "ops": {
+      "userId": "agent-ops",
+      "roles": ["default"]
+    },
+    "unknown": {
+      "userId": "unknown-agent",
       "roles": ["default"]
     }
   },
