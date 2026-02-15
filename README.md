@@ -80,6 +80,8 @@ If any check fails, the tool call is blocked and the agent receives a clear expl
 
 ## See it block an attack
 
+> **Watch the demo:** [See governance block unauthorized tool calls in real time](https://reducibl.com/writing/what-tools-is-your-openclaw-agent-using)
+
 Once installed, try these commands to see governance in action:
 
 ```bash
