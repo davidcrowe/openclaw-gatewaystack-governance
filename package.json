@@ -39,11 +39,7 @@
     "test:all": "vitest run && npm test",
     "prepublishOnly": "npm run build && npm test"
   },
-  "dependencies": {
-    "minimist": "^1.2.8"
-  },
   "devDependencies": {
-    "@types/minimist": "^1.2.5",
     "@types/node": "^20.0.0",
     "typescript": "^5.4.0",
     "vitest": "^4.0.18"

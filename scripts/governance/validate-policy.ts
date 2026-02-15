@@ -1,3 +1,36 @@
+/**
+ * Detects regex patterns likely to cause catastrophic backtracking (ReDoS).
+ * Catches nested quantifiers like (a+)+, (a*)+, (a+)*, (a|b+)+ and
+ * overlapping alternations with quantifiers.
+ */
+function isReDoSVulnerable(pattern: string): boolean {
+  // Nested quantifiers: a group with an inner quantifier followed by an outer quantifier
+  // e.g. (a+)+, (a+)*, (.*)+, (a|b+)+, ([a-z]+)*
+  const nestedQuantifier = /\([^)]*[+*]\)?[+*{]/;
+  if (nestedQuantifier.test(pattern)) {
+    return true;
+  }
+
+  // Overlapping alternation with quantifier: (a|a)+ or similar
+  // Simplified check: group with alternation followed by quantifier where
+  // alternatives share character classes
+  const groupWithAlt = /\(([^)]+\|[^)]+)\)[+*{]/;
+  const match = pattern.match(groupWithAlt);
+  if (match) {
+    const alternatives = match[1].split("|");
+    // If any two alternatives are identical or both use wildcards, flag it
+    for (let i = 0; i < alternatives.length; i++) {
+      for (let j = i + 1; j < alternatives.length; j++) {
+        if (alternatives[i].trim() === alternatives[j].trim()) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 export interface PolicyValidationResult {
   valid: boolean;
   errors: string[];
@@ -68,6 +101,10 @@ export function validatePolicy(policy: unknown): PolicyValidationResult {
             new RegExp(pat);
           } catch {
             warnings.push(`customPatterns[${i}] is not a valid regex: "${pat}"`);
+            continue;
+          }
+          if (isReDoSVulnerable(pat)) {
+            warnings.push(`customPatterns[${i}] may be vulnerable to ReDoS (catastrophic backtracking): "${pat}"`);
           }
         }
       }

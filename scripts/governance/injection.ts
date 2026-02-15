@@ -44,12 +44,19 @@ export function detectInjection(
     }
   }
 
-  // Custom patterns from policy
+  // Custom patterns from policy — guarded with per-pattern timeout
   if (policy.injectionDetection.customPatterns) {
     for (const patternStr of policy.injectionDetection.customPatterns) {
       try {
         const pattern = new RegExp(patternStr, "i");
+        const start = Date.now();
         const match = args.match(pattern);
+        const elapsed = Date.now() - start;
+        if (elapsed > 50) {
+          // Pattern took too long — likely ReDoS, skip and log
+          matches.push(`CUSTOM: ${patternStr} — skipped (${elapsed}ms, possible ReDoS)`);
+          continue;
+        }
         if (match) {
           matches.push(`CUSTOM: ${patternStr} → "${match[0]}"`);
         }

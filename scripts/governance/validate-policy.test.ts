@@ -152,5 +152,32 @@ describe("validatePolicy", () => {
       const result = validatePolicy(policy);
       expect(result.warnings.some((w) => w.includes("not a valid regex"))).toBe(true);
     });
+
+    it("warns on ReDoS-vulnerable custom pattern", () => {
+      const policy = {
+        ...validPolicy,
+        injectionDetection: {
+          enabled: true,
+          sensitivity: "medium" as const,
+          customPatterns: ["(a+)+b"],
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.warnings.some((w) => w.includes("ReDoS"))).toBe(true);
+    });
+
+    it("does not warn on safe custom patterns", () => {
+      const policy = {
+        ...validPolicy,
+        injectionDetection: {
+          enabled: true,
+          sensitivity: "medium" as const,
+          customPatterns: ["secret_key\\s*=", "password:\\s+\\S+"],
+        },
+      };
+      const result = validatePolicy(policy);
+      const redosWarnings = result.warnings.filter((w) => w.includes("ReDoS"));
+      expect(redosWarnings).toHaveLength(0);
+    });
   });
 });

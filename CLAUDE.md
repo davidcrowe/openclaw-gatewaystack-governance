@@ -6,7 +6,7 @@ GatewayStack governance layer for OpenClaw — intercepts every tool call and ap
 ## stack
 - Node.js 18+ (TypeScript)
 - CommonJS modules (compiled from TS)
-- No external runtime dependencies beyond `minimist`
+- No external runtime dependencies
 - Vitest for unit tests
 
 ## key files
@@ -63,7 +63,6 @@ Always verify after making changes:
 
 ## known issues
 - Rate limiting uses busy-wait spin lock (LOCK_RETRY_MS) — acceptable for single-user CLI but not production server use
-- `minimist` is declared as a dependency but not actually used (args are parsed manually)
 
 ## notes
 - Never add co-authored-by to commits
