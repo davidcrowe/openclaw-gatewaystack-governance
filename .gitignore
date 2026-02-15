@@ -5,7 +5,5 @@ audit.jsonl
 policy.json
 scripts/*.js
 scripts/*.d.ts
-!scripts/*.ts
 src/*.js
 src/*.d.ts
-!src/*.ts
