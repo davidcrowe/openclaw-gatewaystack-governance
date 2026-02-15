@@ -10,6 +10,8 @@ This plugin fixes that. It hooks into OpenClaw at the process level and enforces
 
 > **New to OpenClaw?** [OpenClaw](https://github.com/openclaw/openclaw) is an open-source framework for building personal AI agents that use tools — file access, shell commands, web search, and more. Tools are powerful, which is exactly why they need governance.
 
+**Contents:** [The threat is real](#the-threat-is-real) · [Why skills aren't enough](#why-skills-arent-enough) · [How it protects you](#how-it-protects-you) · [See it block an attack](#see-it-block-an-attack) · [Get started](#get-started) · [Configure your policy](#configure-your-policy)
+
 ## The threat is real
 
 These aren't hypotheticals. Published security research has found serious vulnerabilities in the OpenClaw ecosystem:
@@ -36,20 +38,15 @@ This wasn't a fluke or a prompt engineering problem. It's a fundamental architec
 ## How it protects you
 
 ```mermaid
-%%{init: {'theme': 'dark'}}%%
 flowchart LR
-    A["🔧 Tool call"] --> B["🪪 Identity"]
-    B --> C["🔒 Scope"]
-    C --> D["⏱️ Rate limit"]
-    D --> E["🛡️ Injection scan"]
-    E --> F["📋 Audit log"]
-    F --> G{"Pass?"}
-    G -- "✅ Yes" --> H["Tool executes"]
-    G -- "🚫 No" --> I["Blocked + reason"]
-
-    style A fill:#1a1a2e,stroke:#16213e,color:#e0e0e0
-    style H fill:#0d3b2e,stroke:#16213e,color:#e0e0e0
-    style I fill:#3b0d0d,stroke:#16213e,color:#e0e0e0
+    A[Tool call] --> B[Identity]
+    B --> C[Scope]
+    C --> D[Rate limit]
+    D --> E[Injection scan]
+    E --> F[Audit log]
+    F --> G{Pass?}
+    G -- Yes --> H[Tool executes]
+    G -- No --> I[Blocked + reason]
 ```
 
 Every tool call passes through five checks, in order:
@@ -93,11 +90,11 @@ node scripts/governance-gateway.js \
 git clone https://github.com/davidcrowe/openclaw-gatewaystack-governance.git
 cd openclaw-gatewaystack-governance
 npm install && npm run build
-cp policy.example.json policy.json        # start with the example policy
-openclaw plugins install ./               # register as a process-level plugin
+cp policy.example.json policy.json        # create your policy from the example
+openclaw plugins install ./               # copies everything (including policy.json) to ~/.openclaw/plugins/
 ```
 
-That's it. Governance is now active on every tool call. Edit `policy.json` to configure your allowlist, identity map, and rate limits (see below).
+That's it. Governance is now active on every tool call. To customize your policy later, edit `~/.openclaw/plugins/gatewaystack-governance/policy.json` (see [Configure your policy](#configure-your-policy) below).
 
 > **Step-by-step guide with screenshots:** See [docs/getting-started.md](docs/getting-started.md) for a detailed walkthrough of installation, configuration, and verification.
 

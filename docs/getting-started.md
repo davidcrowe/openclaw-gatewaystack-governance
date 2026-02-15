@@ -104,7 +104,28 @@ Every check — allowed or denied — is logged. Look at what just happened:
 tail -3 audit.jsonl | jq .
 ```
 
-You'll see three entries with full context: who called, which tool, what the arguments were, which checks passed or failed, and the final verdict.
+You'll see three entries with full context. Here's what a single audit entry looks like — every field is captured:
+
+```json
+{
+  "timestamp": "2026-02-15T19:59:28.002Z",
+  "requestId": "gov-1771185568000-88741fab",
+  "action": "tool-check",
+  "tool": "read",
+  "user": "main",
+  "resolvedIdentity": "agent-main",
+  "roles": ["admin"],
+  "session": "test",
+  "allowed": false,
+  "reason": "Prompt injection detected",
+  "checks": {
+    "identity": { "passed": true, "detail": "Mapped main → agent-main with roles [admin]" },
+    "scope":    { "passed": true, "detail": "Tool \"read\" is allowlisted for roles [admin]" },
+    "rateLimit":{ "passed": true, "detail": "Rate limit OK: 5/100 calls in window" },
+    "injection":{ "passed": false, "detail": "Detected 1 potential injection pattern(s)" }
+  }
+}
+```
 
 ![Audit log: denied entries with full check details](images/04-audit-log-denied.png)
 
@@ -130,13 +151,14 @@ You should see `gatewaystack-governance` in the list.
 
 ## Step 6: Configure your policy
 
-Copy the example policy to the plugin directory:
+The plugin install in Step 5 copied `policy.json` from the repo into the plugin directory. To customize it, edit the installed copy:
 
 ```bash
-cp policy.example.json ~/.openclaw/plugins/gatewaystack-governance/policy.json
+# Edit the installed policy (not the repo copy)
+nano ~/.openclaw/plugins/gatewaystack-governance/policy.json
 ```
 
-Open `policy.json` in your editor. There are three sections to customize:
+There are three sections to customize:
 
 **1. Allowlist** — which tools can be called, and who can call them. Anything not listed is blocked.
 
