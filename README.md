@@ -4,6 +4,10 @@
 
 # GatewayStack Governance for OpenClaw
 
+[![npm version](https://img.shields.io/npm/v/@gatewaystack/gatewaystack-governance)](https://www.npmjs.com/package/@gatewaystack/gatewaystack-governance)
+[![CI](https://github.com/davidcrowe/openclaw-gatewaystack-governance/actions/workflows/ci.yml/badge.svg)](https://github.com/davidcrowe/openclaw-gatewaystack-governance/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 OpenClaw gives your AI agents real power — they can read files, write code, execute commands, search the web, and call external APIs. But there's nothing standing between an agent and a dangerous tool call. No identity checks. No rate limits. No audit trail. If a malicious skill or a prompt injection tells your agent to exfiltrate your SSH keys, it just... does it.
 
 This plugin fixes that. It hooks into OpenClaw at the process level and enforces five governance checks on **every** tool call before it executes. Your agent can't bypass it, skip it, or talk its way around it.
@@ -86,22 +90,33 @@ node scripts/governance-gateway.js \
 
 ## Get started
 
+Install from npm:
+
+```bash
+openclaw plugins install @gatewaystack/gatewaystack-governance
+```
+
+That's it. Governance is now active on every tool call. The plugin ships with `policy.example.json` — copy it to create your policy:
+
+```bash
+cp ~/.openclaw/plugins/gatewaystack-governance/policy.example.json \
+   ~/.openclaw/plugins/gatewaystack-governance/policy.json
+```
+
+Then customize it for your setup (see [Configure your policy](#configure-your-policy) below).
+
+> **Step-by-step guide with screenshots:** See [docs/getting-started.md](docs/getting-started.md) for a detailed walkthrough of installation, configuration, and verification.
+
+### Install from source
+
+For development or to run the tests yourself:
+
 ```bash
 git clone https://github.com/davidcrowe/openclaw-gatewaystack-governance.git
 cd openclaw-gatewaystack-governance
 npm install && npm run build
-cp policy.example.json policy.json        # create your policy from the example
-openclaw plugins install ./               # copies everything (including policy.json) to ~/.openclaw/plugins/
-```
-
-That's it. Governance is now active on every tool call. To customize your policy later, edit `~/.openclaw/plugins/gatewaystack-governance/policy.json` (see [Configure your policy](#configure-your-policy) below).
-
-> **Step-by-step guide with screenshots:** See [docs/getting-started.md](docs/getting-started.md) for a detailed walkthrough of installation, configuration, and verification.
-
-For development, use `--link` to symlink instead of copy so changes take effect immediately:
-
-```bash
-openclaw plugins install --link ./
+cp policy.example.json policy.json
+openclaw plugins install --link ./        # symlink so changes take effect immediately
 ```
 
 ## Configure your policy

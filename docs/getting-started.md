@@ -8,6 +8,22 @@ A step-by-step walkthrough of installing, configuring, and verifying governance 
 - Node.js 18 or later
 - A terminal with shell access
 
+## Quick install (from npm)
+
+If you just want to install and start using it:
+
+```bash
+openclaw plugins install @gatewaystack/gatewaystack-governance
+cp ~/.openclaw/plugins/gatewaystack-governance/policy.example.json \
+   ~/.openclaw/plugins/gatewaystack-governance/policy.json
+```
+
+Then skip to [Step 5: Install as a plugin](#step-5-install-as-a-plugin) to verify it loaded, and [Step 6](#step-6-configure-your-policy) to customize your policy.
+
+---
+
+The steps below walk through installing **from source** — useful if you want to run the tests, see governance in action from the CLI, or contribute.
+
 ## Step 1: Clone and build
 
 ```bash
