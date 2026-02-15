@@ -3,7 +3,7 @@ audit.jsonl
 .rate-limit-state.json
 .rate-limit-state.json.lock
 policy.json
-scripts/*.js
-scripts/*.d.ts
+scripts/**/*.js
+scripts/**/*.d.ts
 src/*.js
 src/*.d.ts

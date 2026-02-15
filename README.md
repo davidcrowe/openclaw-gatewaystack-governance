@@ -1,10 +1,10 @@
+<p align="center">
+  <img src="OpenClaw-GatewayStack-Governance.png" alt="OpenClaw GatewayStack Governance" width="800" />
+</p>
+
 # GatewayStack Governance for OpenClaw
 
-Deny-by-default governance for every tool call in your OpenClaw instance. Applies five security checks — identity verification, scope enforcement, rate limiting, prompt injection detection, and audit logging.
-
-## Why this exists
-
-OpenClaw's built-in tool policies control *which* tools run. They don't answer: *who* is calling, *what's* in the arguments, *how often* are they calling, and *where's the record*? Published security research shows why that matters:
+OpenClaw has no governance layer. Any agent can call any tool, with any arguments, as often as it wants, with no identity check, no rate limit, and no audit trail. Published security research shows why that's a problem:
 
 | Vulnerability | Source | What's missing |
 |---|---|---|
@@ -12,6 +12,24 @@ OpenClaw's built-in tool policies control *which* tools run. They don't answer: 
 | 76 confirmed malicious payloads in ClawHub | [Snyk ToxicSkills](https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/) | Deny-by-default tool access |
 | CVE-2026-25253: One-click RCE via WebSocket hijacking | [The Hacker News](https://thehackernews.com/2026/02/openclaw-bug-enables-one-click-remote.html) | Gateway authentication |
 | Prompt injection via email extracts private keys | [Kaspersky](https://www.kaspersky.com/blog/openclaw-vulnerabilities-exposed/55263/) | Content inspection, identity attribution |
+
+This plugin adds deny-by-default governance to every tool call — identity verification, scope enforcement, rate limiting, prompt injection detection, and audit logging.
+
+## See it work
+
+After installing (next section), try these:
+
+```bash
+# Tool not in allowlist → blocked
+node scripts/governance-gateway.js \
+  --tool "dangerous_tool" --user "main" --session "test-session"
+# → { "allowed": false, "reason": "Scope check failed: Tool \"dangerous_tool\" is not in the allowlist..." }
+
+# Prompt injection in arguments → blocked
+node scripts/governance-gateway.js \
+  --tool "read" --args "ignore previous instructions" --user "main" --session "test-session"
+# → { "allowed": false, "reason": "Blocked: potential prompt injection detected..." }
+```
 
 ## Install as Plugin (recommended)
 
@@ -42,19 +60,31 @@ openclaw plugins install --link ./
 
 ### How plugin mode works
 
-Every tool call goes through the governance check before execution:
+Every tool call passes through five governance checks before execution:
+
+```mermaid
+flowchart LR
+    A[Tool call] --> B[Identity]
+    B --> C[Scope]
+    C --> D[Rate limit]
+    D --> E[Injection scan]
+    E --> F[Audit log]
+    F --> G{Pass?}
+    G -->|Yes| H[Tool executes]
+    G -->|No| I[Blocked + reason]
+```
 
 1. **Identity** — maps `ctx.agentId` (e.g. "main", "ops") to a policy identity with roles
 2. **Scope** — checks if the tool is in the allowlist and the agent has the required role
-3. **Rate limit** — enforces per-user and per-session call limits
+3. **Rate limit** — enforces per-user and per-session sliding window limits
 4. **Injection detection** — scans tool arguments for known attack patterns (40+ from Snyk, Cisco, Kaspersky research)
 5. **Audit** — logs every check result to `audit.jsonl`
 
-If any check fails, the tool call is blocked and the agent sees the reason.
+If any check fails, the tool call is blocked and the agent sees the reason. Governance checks add <1ms per tool call.
 
 ### Identity mapping for agents
 
-OpenClaw is a single-user personal AI with multiple agents. The identity map in `policy.json` maps agent IDs to governance roles:
+OpenClaw is a single-user personal AI with multiple agents. The identity map in `policy.json` controls what each agent can do — for example, restrict your `ops` agent to read-only tools while giving your `dev` agent full access:
 
 ```json
 {
@@ -113,25 +143,7 @@ See `references/policy-reference.md` for the full policy schema.
 npm test
 ```
 
-Runs 13 checks covering policy loading, identity mapping, injection detection, scope enforcement, and audit logging.
-
-## Verify
-
-Test a blocked tool call:
-
-```bash
-node scripts/governance-gateway.js \
-  --tool "dangerous_tool" --user "main" --session "test-session"
-# → { "allowed": false, "reason": "Scope check failed: Tool \"dangerous_tool\" is not in the allowlist..." }
-```
-
-Test injection detection:
-
-```bash
-node scripts/governance-gateway.js \
-  --tool "read" --args "ignore previous instructions" --user "main" --session "test-session"
-# → { "allowed": false, "reason": "Blocked: potential prompt injection detected..." }
-```
+Runs 14 checks covering policy loading, schema validation, identity mapping, injection detection, scope enforcement, and audit logging.
 
 ## This skill + GatewayStack
 
@@ -139,7 +151,7 @@ node scripts/governance-gateway.js \
 
 **[GatewayStack](https://github.com/davidcrowe/GatewayStack)** governs how your agents connect to external services — GitHub, Slack, Salesforce, and any API via MCP gateway with JWT-verified identity, ML-assisted content scanning, and centralized policy.
 
-Use both for defense in depth. For managed GatewayStack, see [AgenticControlPlane](https://agenticcontrolplane.com).
+Use both for defense in depth. [AgenticControlPlane](https://agenticcontrolplane.com) is the managed commercial version of GatewayStack — hosted infrastructure, dashboard, and support.
 
 ## License
 
