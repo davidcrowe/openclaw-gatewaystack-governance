@@ -218,27 +218,34 @@ Use OpenClaw's tool policies for hard enforcement. Use this skill for visibility
 
 ## Limitations
 
-- **Skill-layer governance.** This runs as a skill, not a process-level hook. OpenClaw's `before_tool_call` hook is not yet shipped. When it is, this skill can register as a real pre-execution gate. Until then, the audit log and injection testing work standalone, but enforcement depends on the agent following SKILL.md instructions.
-- **Identity is self-asserted.** The `--user` and `--channel` values come from whatever the agent passes. No cryptographic authentication — that requires JWT/OIDC, which is what `@gatewaystack/identifiabl` provides in the full GatewayStack.
+- **Skill-layer governance.** This runs as a skill, not a process-level hook. OpenClaw's `before_tool_call` hook is not yet shipped. When it ships, this skill can register as a real pre-execution gate. Until then, you invoke it manually or rely on the agent following SKILL.md instructions. We're watching for that hook — when it lands, we'll wire this up properly.
+- **Identity is self-asserted.** The `--user` and `--channel` values come from whatever the agent passes. No cryptographic authentication at this layer.
 - **Injection detection is regex-only.** 40+ patterns from published research catch known attacks. They can't catch novel or obfuscated patterns. Defense in depth, not a perimeter.
-- **Local enforcement only.** Single instance. For centralized policy across multiple instances, see [AgenticControlPlane](https://agenticcontrolplane.com).
+- **Local only.** Single instance, local policy file, local audit log.
 
 The most valuable piece regardless: the **audit log**. A structured record of every tool invocation with identity context is useful for incident response and compliance whether or not the other checks are enforced.
 
-## Growing beyond this skill
+## This skill + GatewayStack
 
-This skill is the right starting point. When you hit its limits, each one maps to a GatewayStack capability:
+These are two products for two jobs. You use both.
 
-| This skill | Limitation | GatewayStack / AgenticControlPlane |
+**This skill** governs what happens on the machine — local tools like Read, Write, and Bash. Identity mapping, injection detection in tool arguments, rate limiting, and audit logging for everything your agent does locally.
+
+**[GatewayStack](https://github.com/davidcrowe/GatewayStack)** governs how your agents connect to external services — GitHub, Slack, Salesforce, and any API. Every call routes through an MCP gateway with JWT-verified identity, ML-assisted content scanning, centralized policy, and structured audit logging.
+
+| | This skill | GatewayStack |
 |---|---|---|
-| `--user "david"` self-asserted identity | Agent can lie about who it is | **identifiabl** — JWT/OIDC verification against your IdP. Cryptographic proof of identity on every request. |
-| File-based rate limiting | Single instance only, no cross-instance coordination | **limitabl** — Firestore-backed rate limits, budget caps, and agent guards across all instances. |
-| Regex injection detection | Cannot catch novel or obfuscated attacks | **transformabl** — PII detection, content classification, and ML-assisted content scanning. |
-| Local `policy.json` | Manual editing, no centralized management | **AgenticControlPlane** — manage policies across all your OpenClaw instances from a single dashboard. Push policy changes without restarting agents. |
-| JSONL audit log on disk | Local file, no search, no alerting | **explicabl** — structured audit logging to Firestore with search, filtering, webhook alerts, and compliance exports. |
-| Skill-layer enforcement only | Malicious skill can skip the check | **GatewayStack MCP Gateway** — all tool calls route through a gateway with process-level enforcement. No tool executes without passing governance. |
+| **Scope** | Local tools (Read, Write, Bash) | External APIs and services |
+| **Identity** | Self-asserted (policy.json) | JWT/OIDC verified (identifiabl) |
+| **Enforcement** | Skill-layer (until hooks ship) | Gateway-level (infrastructure) |
+| **Injection detection** | Regex (40+ patterns) | ML-assisted content scanning (transformabl) |
+| **Rate limiting** | File-based, single instance | Firestore-backed, cross-instance (limitabl) |
+| **Audit** | Local JSONL file | Firestore with search, alerts, exports (explicabl) |
+| **Policy management** | Edit policy.json manually | Centralized dashboard (AgenticControlPlane) |
 
-The migration path: install this skill today, get visibility into what your agents are doing, then upgrade to [GatewayStack](https://github.com/davidcrowe/GatewayStack) (self-hosted) or [AgenticControlPlane](https://agenticcontrolplane.com) (managed) when you need production-grade controls.
+Use OpenClaw's built-in tool policies for hard tool-level access control. Use this skill for local governance. Use GatewayStack for external service governance. Three layers, each doing what it's best at.
+
+For managed GatewayStack, see [AgenticControlPlane](https://agenticcontrolplane.com).
 
 ## Learn more
 
