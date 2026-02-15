@@ -19,8 +19,8 @@ Plugin mode hooks into OpenClaw's `before_tool_call` event at the process level.
 
 ```bash
 # Clone and build
-git clone https://github.com/davidcrowe/openclaw-gatewaystack-skill.git
-cd openclaw-gatewaystack-skill
+git clone https://github.com/davidcrowe/openclaw-gatewaystack-governance.git
+cd openclaw-gatewaystack-governance
 npm install && npm run build
 
 # Install as an OpenClaw plugin (copies files to ~/.openclaw/plugins/)
@@ -75,7 +75,7 @@ OpenClaw is a single-user personal AI with multiple agents. The identity map in 
 If you can't use the plugin system, install as a skill instead. Note: skill mode relies on the LLM voluntarily calling the governance check — it can be bypassed.
 
 ```bash
-git clone https://github.com/davidcrowe/openclaw-gatewaystack-skill.git \
+git clone https://github.com/davidcrowe/openclaw-gatewaystack-governance.git \
   ~/.openclaw/skills/gatewaystack-governance
 cd ~/.openclaw/skills/gatewaystack-governance
 npm install && npm run build

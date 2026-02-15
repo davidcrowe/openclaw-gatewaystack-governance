@@ -6,7 +6,7 @@
   "author": "David Crowe <david@reducibl.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/davidcrowe/openclaw-gatewaystack-skill"
+    "url": "https://github.com/davidcrowe/openclaw-gatewaystack-governance"
   },
   "main": "scripts/governance-gateway.js",
   "bin": {
