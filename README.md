@@ -20,11 +20,11 @@ It hooks into OpenClaw at the process level and enforces five governance checks 
 
 > **New to OpenClaw?** [OpenClaw](https://github.com/openclaw/openclaw) is an open-source framework for building personal AI agents that use tools — file access, shell commands, web search, and more. Tools are powerful, which is exactly why they need governance.
 
+Install with one command. Zero config. Immediate security, governance, and peace of mind for every tool call.
+
 ```bash
 openclaw plugins install @gatewaystack/gatewaystack-governance
 ```
-
-One command. Zero config. Governance is active on every tool call immediately.
 
 **Contents:** [The threat is real](#the-threat-is-real) · [Why skills aren't enough](#why-skills-arent-enough) · [How it protects you](#how-it-protects-you) · [See it block an attack](#see-it-block-an-attack) · [Get started](#get-started) · [Configure your policy](#configure-your-policy)
 
