@@ -6,6 +6,17 @@ import { checkScope } from "./scope.js";
 import { checkRateLimit } from "./rate-limit.js";
 import { detectInjection } from "./injection.js";
 import { writeAuditLog } from "./audit.js";
+import {
+  classifyInjectionSeverity,
+  isFirstTimeToolUse,
+  recordToolUse,
+  hasApprovedToken,
+  consumeApprovedToken,
+  generateApprovalToken,
+  formatReviewBlock,
+  hashArgs,
+} from "./escalation.js";
+import { detectAnomalies, countCurrentWindowCalls } from "./behavioral.js";
 
 export async function checkGovernance(params: {
   toolName: string;
@@ -18,6 +29,38 @@ export async function checkGovernance(params: {
   const requestId = generateRequestId();
 
   const checks: Record<string, { passed: boolean; detail: string }> = {};
+
+  // 0. Check for pre-approved escalation token
+  if (policy.escalation?.enabled && params.args) {
+    const argsH = hashArgs(params.args);
+    if (hasApprovedToken(params.toolName, argsH)) {
+      consumeApprovedToken(params.toolName, argsH);
+      recordToolUse(params.userId, params.toolName);
+      checks["escalation"] = {
+        passed: true,
+        detail: "Approved via escalation token",
+      };
+
+      const entry: AuditEntry = {
+        timestamp: new Date().toISOString(),
+        requestId,
+        action: "tool-check",
+        tool: params.toolName,
+        user: params.userId,
+        session: params.session,
+        allowed: true,
+        reason: "Approved via escalation token",
+        checks,
+      };
+      writeAuditLog(entry, policy);
+
+      return {
+        allowed: true,
+        requestId,
+        verdict: "allow",
+      };
+    }
+  }
 
   // 1. Identity verification
   const identity = verifyIdentity(params.userId, undefined, policy);
@@ -112,6 +155,46 @@ export async function checkGovernance(params: {
     };
 
     if (!injection.clean) {
+      const severity = classifyInjectionSeverity(injection.matches);
+
+      // Step 4: MEDIUM + escalation enabled → review instead of block
+      if (
+        severity === "MEDIUM" &&
+        policy.escalation?.enabled &&
+        policy.escalation.reviewOnMediumInjection
+      ) {
+        const argsH = hashArgs(params.args);
+        const token = generateApprovalToken(
+          params.toolName,
+          argsH,
+          policy.escalation.tokenTTLSeconds
+        );
+        const reviewReason = `Medium-severity injection detected: ${injection.matches.join("; ")}`;
+        const entry: AuditEntry = {
+          timestamp: new Date().toISOString(),
+          requestId,
+          action: "tool-check",
+          tool: params.toolName,
+          user: params.userId,
+          resolvedIdentity: identity.userId,
+          roles: identity.roles,
+          session: params.session,
+          allowed: false,
+          reason: "Escalation: review required (medium injection)",
+          checks,
+        };
+        writeAuditLog(entry, policy);
+        return {
+          allowed: false,
+          reason: formatReviewBlock(reviewReason, token),
+          requestId,
+          patterns: injection.matches,
+          verdict: "review",
+          reviewReason,
+        };
+      }
+
+      // HIGH or LOW (without escalation) → block
       const entry: AuditEntry = {
         timestamp: new Date().toISOString(),
         requestId,
@@ -131,6 +214,7 @@ export async function checkGovernance(params: {
         reason: `Blocked: potential prompt injection detected in tool arguments. ${injection.matches.length} pattern(s) matched.`,
         requestId,
         patterns: injection.matches,
+        verdict: "block",
       };
     }
 
@@ -166,7 +250,152 @@ export async function checkGovernance(params: {
     }
   }
 
-  // All checks passed
+  // 4.5. First-time tool usage review
+  if (
+    policy.escalation?.enabled &&
+    policy.escalation.reviewOnFirstToolUse &&
+    isFirstTimeToolUse(params.userId, params.toolName)
+  ) {
+    const argsH = hashArgs(params.args || "");
+    const token = generateApprovalToken(
+      params.toolName,
+      argsH,
+      policy.escalation.tokenTTLSeconds
+    );
+    const reviewReason = `First-time use of tool "${params.toolName}" by "${params.userId}"`;
+    checks["firstUse"] = {
+      passed: false,
+      detail: reviewReason,
+    };
+    const entry: AuditEntry = {
+      timestamp: new Date().toISOString(),
+      requestId,
+      action: "tool-check",
+      tool: params.toolName,
+      user: params.userId,
+      resolvedIdentity: identity.userId,
+      roles: identity.roles,
+      session: params.session,
+      allowed: false,
+      reason: "Escalation: review required (first tool use)",
+      checks,
+    };
+    writeAuditLog(entry, policy);
+    return {
+      allowed: false,
+      reason: formatReviewBlock(reviewReason, token),
+      requestId,
+      verdict: "review",
+      reviewReason,
+    };
+  }
+
+  // 5. Behavioral monitoring
+  if (policy.behavioralMonitoring?.enabled) {
+    const auditPath = policy.auditLog?.path || "audit.jsonl";
+    const windowCalls = countCurrentWindowCalls(
+      auditPath,
+      policy.behavioralMonitoring.monitoringWindowSeconds
+    );
+    const anomalies = detectAnomalies(
+      params.toolName,
+      windowCalls,
+      params.userId,
+      policy
+    );
+
+    if (anomalies.length > 0) {
+      checks["behavioral"] = {
+        passed: false,
+        detail: anomalies.map((a) => `[${a.severity}] ${a.type}: ${a.detail}`).join("; "),
+      };
+
+      const action = policy.behavioralMonitoring.action;
+
+      if (action === "block") {
+        const entry: AuditEntry = {
+          timestamp: new Date().toISOString(),
+          requestId,
+          action: "tool-check",
+          tool: params.toolName,
+          user: params.userId,
+          resolvedIdentity: identity.userId,
+          roles: identity.roles,
+          session: params.session,
+          allowed: false,
+          reason: "Behavioral anomaly detected",
+          checks,
+          anomalies,
+        };
+        writeAuditLog(entry, policy);
+        return {
+          allowed: false,
+          reason: `Blocked: behavioral anomaly detected — ${anomalies.map((a) => a.detail).join("; ")}`,
+          requestId,
+          verdict: "block",
+        };
+      }
+
+      if (action === "review" && policy.escalation?.enabled) {
+        const argsH = hashArgs(params.args || "");
+        const token = generateApprovalToken(
+          params.toolName,
+          argsH,
+          policy.escalation.tokenTTLSeconds
+        );
+        const reviewReason = `Behavioral anomaly: ${anomalies.map((a) => a.detail).join("; ")}`;
+        const entry: AuditEntry = {
+          timestamp: new Date().toISOString(),
+          requestId,
+          action: "tool-check",
+          tool: params.toolName,
+          user: params.userId,
+          resolvedIdentity: identity.userId,
+          roles: identity.roles,
+          session: params.session,
+          allowed: false,
+          reason: "Escalation: review required (behavioral anomaly)",
+          checks,
+          anomalies,
+        };
+        writeAuditLog(entry, policy);
+        return {
+          allowed: false,
+          reason: formatReviewBlock(reviewReason, token),
+          requestId,
+          verdict: "review",
+          reviewReason,
+        };
+      }
+
+      // action === "log" — continue but log the anomaly
+      const entry: AuditEntry = {
+        timestamp: new Date().toISOString(),
+        requestId,
+        action: "behavioral-anomaly",
+        tool: params.toolName,
+        user: params.userId,
+        resolvedIdentity: identity.userId,
+        roles: identity.roles,
+        session: params.session,
+        allowed: true,
+        reason: "Behavioral anomaly logged (action: log)",
+        anomalies,
+      };
+      writeAuditLog(entry, policy);
+    } else {
+      checks["behavioral"] = {
+        passed: true,
+        detail: "No anomalies detected",
+      };
+    }
+  }
+
+  // All checks passed — record tool use for escalation tracking
+  if (policy.escalation?.enabled) {
+    recordToolUse(params.userId, params.toolName);
+  }
+
   const entry: AuditEntry = {
     timestamp: new Date().toISOString(),
     requestId,
@@ -187,5 +416,6 @@ export async function checkGovernance(params: {
     requestId,
     identity: identity.userId,
     roles: identity.roles,
+    verdict: "allow",
   };
 }

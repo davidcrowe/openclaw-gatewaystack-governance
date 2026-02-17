@@ -2,6 +2,9 @@ node_modules/
 audit.jsonl
 .rate-limit-state.json
 .rate-limit-state.json.lock
+.agent-tool-usage.json
+.pending-reviews.json
+.behavioral-baseline.json
 policy.json
 scripts/**/*.js
 scripts/**/*.d.ts

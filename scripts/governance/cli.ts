@@ -10,10 +10,31 @@ import { detectInjection } from "./injection.js";
 import { writeAuditLog } from "./audit.js";
 import { checkGovernance } from "./check.js";
 import { validatePolicy } from "./validate-policy.js";
+import {
+  approveToken,
+  classifyInjectionSeverity,
+  generateApprovalToken,
+  hashArgs,
+  hasApprovedToken,
+  consumeApprovedToken,
+} from "./escalation.js";
+import { scanOutput, isTransformablAvailable } from "./dlp.js";
+import {
+  buildBaseline,
+  detectAnomalies,
+  isLimitablAvailable,
+} from "./behavioral.js";
 
 export function parseArgs(argv: string[]): GovernanceRequest {
   const args = argv.slice(2);
   const req: GovernanceRequest = { action: "check" };
+
+  // Support positional commands: "approve <token>"
+  if (args[0] === "approve" && args[1] && !args[1].startsWith("--")) {
+    req.action = "approve";
+    req.tool = args[1]; // reuse tool field for the token
+    return req;
+  }
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -68,6 +89,45 @@ export function runGovernanceCheck(req: GovernanceRequest): void {
   if (req.action === "self-test") {
     runSelfTest(policy);
     return;
+  }
+
+  if (req.action === "build-baseline") {
+    const auditPath = policy.auditLog?.path || DEFAULT_AUDIT_PATH;
+    const windowSeconds = policy.behavioralMonitoring?.monitoringWindowSeconds || 3600;
+    try {
+      const baseline = buildBaseline(auditPath, windowSeconds);
+      console.log(JSON.stringify({ success: true, baseline }));
+    } catch (e: any) {
+      console.log(JSON.stringify({ success: false, error: e.message }));
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (req.action === "dlp-scan") {
+    if (!req.output) {
+      console.log(JSON.stringify({ error: "Usage: --action dlp-scan --output <text>" }));
+      process.exit(1);
+    }
+    try {
+      const result = scanOutput(req.output, policy);
+      console.log(JSON.stringify(result));
+    } catch (e: any) {
+      console.log(JSON.stringify({ error: e.message }));
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (req.action === "approve") {
+    const token = req.tool; // reuse --tool flag for the token value
+    if (!token) {
+      console.log(JSON.stringify({ success: false, detail: "Usage: gatewaystack-governance approve <token> (pass token via --tool)" }));
+      process.exit(1);
+    }
+    const result = approveToken(token);
+    console.log(JSON.stringify(result));
+    process.exit(result.success ? 0 : 1);
   }
 
   if (req.action === "log-result") {
@@ -215,6 +275,60 @@ export function runSelfTest(policy: Policy): void {
     return !result.clean && result.matches.some((m) => m.startsWith("MULTILANG:"));
   });
 
+  // --- DLP self-tests ---
+
+  if (isTransformablAvailable()) {
+    test("DLP: detects PII in output", () => {
+      const dlpPolicy: Policy = {
+        ...policy,
+        outputDlp: { enabled: true, mode: "log", redactionMode: "mask", customPatterns: [] },
+      };
+      const result = scanOutput("My SSN is 123-45-6789", dlpPolicy);
+      return result.hasMatches;
+    });
+
+    test("DLP: reports no matches for clean output", () => {
+      const dlpPolicy: Policy = {
+        ...policy,
+        outputDlp: { enabled: true, mode: "log", redactionMode: "mask", customPatterns: [] },
+      };
+      const result = scanOutput("The weather is nice today", dlpPolicy);
+      return !result.hasMatches;
+    });
+
+    test("DLP: disabled mode returns no matches", () => {
+      const dlpPolicy: Policy = {
+        ...policy,
+        outputDlp: { enabled: false, mode: "log", redactionMode: "mask", customPatterns: [] },
+      };
+      const result = scanOutput("SSN: 123-45-6789", dlpPolicy);
+      return !result.hasMatches;
+    });
+  } else {
+    console.log("  ⊘ DLP: skipped (install @gatewaystack/transformabl-core to enable)");
+  }
+
+  // --- Escalation self-tests ---
+
+  test("Escalation: classifies HIGH severity correctly", () => {
+    return classifyInjectionSeverity(["HIGH: instruction injection"]) === "HIGH";
+  });
+
+  test("Escalation: generates and approves token", () => {
+    const argsH = hashArgs("self-test-args");
+    const token = generateApprovalToken("self-test-tool", argsH, 60);
+    const result = approveToken(token);
+    if (!result.success) return false;
+    const found = hasApprovedToken("self-test-tool", argsH);
+    // Clean up
+    consumeApprovedToken("self-test-tool", argsH);
+    return found;
+  });
+
+  test("Escalation: MEDIUM severity returns 'MEDIUM'", () => {
+    return classifyInjectionSeverity(["MEDIUM: role impersonation"]) === "MEDIUM";
+  });
+
   test("Injection: catches canary token leak", () => {
     // Only meaningful if policy has canary tokens configured
     const testPolicy: Policy = {
@@ -226,6 +340,36 @@ export function runSelfTest(policy: Policy): void {
     };
     const result = detectInjection("leaked: GATEWAY-CANARY-TEST-TOKEN", testPolicy);
     return !result.clean && result.matches.some((m) => m.startsWith("CANARY:"));
+  });
+
+  // --- Behavioral monitoring self-tests ---
+
+  test("Behavioral: detectAnomalies returns array when disabled", () => {
+    const testPolicy: Policy = {
+      ...policy,
+      behavioralMonitoring: {
+        enabled: false,
+        spikeThreshold: 3.0,
+        monitoringWindowSeconds: 3600,
+        action: "log",
+      },
+    };
+    const anomalies = detectAnomalies("read", 5, "agent-test", testPolicy);
+    return anomalies.length === 0;
+  });
+
+  test("Behavioral: flags unusual-pattern when no baseline", () => {
+    const testPolicy: Policy = {
+      ...policy,
+      behavioralMonitoring: {
+        enabled: true,
+        spikeThreshold: 3.0,
+        monitoringWindowSeconds: 3600,
+        action: "log",
+      },
+    };
+    const anomalies = detectAnomalies("read", 5, "self-test-agent", testPolicy);
+    return anomalies.some((a) => a.type === "unusual-pattern");
   });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
