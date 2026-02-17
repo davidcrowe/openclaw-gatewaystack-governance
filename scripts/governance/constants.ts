@@ -9,6 +9,9 @@ export const DEFAULT_POLICY_PATH = path.join(SKILL_DIR, "policy.json");
 export const DEFAULT_EXAMPLE_POLICY_PATH = path.join(SKILL_DIR, "policy.example.json");
 export const DEFAULT_AUDIT_PATH = path.join(SKILL_DIR, "audit.jsonl");
 export const RATE_LIMIT_STATE_PATH = path.join(SKILL_DIR, ".rate-limit-state.json");
+export const FIRST_USE_STATE_PATH = path.join(SKILL_DIR, ".agent-tool-usage.json");
+export const PENDING_REVIEWS_PATH = path.join(SKILL_DIR, ".pending-reviews.json");
+export const BEHAVIORAL_BASELINE_PATH = path.join(SKILL_DIR, ".behavioral-baseline.json");
 
 // ---------------------------------------------------------------------------
 // Known injection patterns from Snyk/Cisco/Kaspersky research

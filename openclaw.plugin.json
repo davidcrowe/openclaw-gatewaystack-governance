@@ -1,7 +1,7 @@
 {
   "id": "gatewaystack-governance",
   "name": "GatewayStack Governance",
-  "description": "Automatic governance for every tool call — identity verification, scope enforcement, rate limiting, prompt injection detection, and audit logging",
+  "description": "Automatic governance for every tool call — identity, scope, rate limiting, injection detection, audit logging, plus opt-in output DLP, escalation, and behavioral monitoring",
   "version": "1.0.0",
   "configSchema": {
     "type": "object",

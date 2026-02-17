@@ -11,6 +11,8 @@ export type { Policy, GovernanceCheckResult } from "./governance/types.js";
 export { loadPolicy } from "./governance/policy.js";
 export { validatePolicy } from "./governance/validate-policy.js";
 export { checkGovernance } from "./governance/check.js";
+export { scanOutput } from "./governance/dlp.js";
+export { detectAnomalies, buildBaseline } from "./governance/behavioral.js";
 
 // CLI entry point
 import { parseArgs, runGovernanceCheck } from "./governance/cli.js";

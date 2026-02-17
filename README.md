@@ -57,17 +57,19 @@ This wasn't a fluke or a prompt engineering problem. It's an architecture issue:
 ## How it protects you
 
 ```
-Tool call → Identity → Scope → Rate limit → Injection scan → Audit log
-                                                                  ↓
-                                                          ┌───────┴───────┐
-                                                          │  All passed?  │
-                                                          └───┬───────┬───┘
-                                                           Yes│       │No
-                                                              ↓       ↓
-                                                        Tool runs   Blocked
+Tool call → Identity → Scope → Rate limit → Injection scan → Behavioral → Audit log
+                                                  │                            ↓
+                                          MEDIUM + escalation          ┌───────┴───────┐
+                                                  ↓                    │  All passed?  │
+                                          Review (approval token)      └───┬───────┬───┘
+                                                                        Yes│       │No
+                                                                           ↓       ↓
+                                                                     Tool runs   Blocked
+                                                                           ↓
+                                                                     DLP scan (output)
 ```
 
-Every tool call passes through five checks, in order:
+Every tool call passes through five core checks, in order:
 
 1. **Identity** — Who is making this call? Maps the agent ID (e.g. "main", "ops", "dev") to a governance identity with specific roles. Unknown agents are denied by default.
 
@@ -80,6 +82,22 @@ Every tool call passes through five checks, in order:
 5. **Audit logging** — Regardless of outcome, every check is logged to an append-only JSONL file with full context: who, what, when, and why it was allowed or denied.
 
 If any check fails, the tool call is blocked and the agent receives a clear explanation of why. The entire pipeline adds **less than 1ms** per tool call.
+
+### Opt-in features
+
+Three additional features can be enabled in `policy.json` — all disabled by default, zero-config core checks work without them:
+
+6. **Output DLP** — Scans tool output for PII (SSNs, API keys, credentials) using [`@gatewaystack/transformabl-core`](https://github.com/davidcrowe/GatewayStack). Two modes: `"log"` (audit only) or `"block"` (redact PII from output before the agent sees it).
+
+7. **Escalation** — Human-in-the-loop review for ambiguous detections. Medium-severity injections and first-time tool usage can trigger a review workflow: the agent is paused, a human approves via `gatewaystack-governance approve <token>`, and the agent retries.
+
+8. **Behavioral monitoring** — Detects anomalous tool usage by comparing the current session against a historical baseline built from the audit log. Flags new tools, frequency spikes, and unknown agents. Uses [`@gatewaystack/limitabl-core`](https://github.com/davidcrowe/GatewayStack) for workflow-level limits.
+
+```bash
+# Install optional GatewayStack packages (only what you need)
+npm install @gatewaystack/transformabl-core   # for output DLP
+npm install @gatewaystack/limitabl-core       # for behavioral monitoring
+```
 
 ## See it block an attack
 
@@ -199,18 +217,45 @@ The `policy.json` file controls everything. Here's a complete working example �
 - **Rate limits** cap any single user at 100 calls per hour and 30 calls per 5-minute session.
 - **Injection detection** at medium sensitivity catches instruction injection, credential exfiltration, reverse shells, role impersonation, and sensitive file access patterns.
 
+The policy also supports three optional sections (all disabled by default):
+
+```json
+{
+  "outputDlp": {
+    "enabled": false,
+    "mode": "log",
+    "redactionMode": "mask",
+    "customPatterns": []
+  },
+  "escalation": {
+    "enabled": false,
+    "reviewOnMediumInjection": true,
+    "reviewOnFirstToolUse": false,
+    "tokenTTLSeconds": 300
+  },
+  "behavioralMonitoring": {
+    "enabled": false,
+    "spikeThreshold": 3.0,
+    "monitoringWindowSeconds": 3600,
+    "action": "log"
+  }
+}
+```
+
 See [references/policy-reference.md](references/policy-reference.md) for the full schema including custom injection patterns, audit log format, and sensitivity level details.
 
 ## Self-test
 
 ```bash
-npm test    # 14 built-in checks
-npm run test:unit   # 87 vitest unit tests
+npm test    # 22 built-in checks
+npm run test:unit   # vitest unit tests
 ```
 
 ## Going further with GatewayStack
 
 This plugin governs what happens **on the machine** — local tools like `read`, `write`, and `exec`.
+
+The opt-in features (output DLP, behavioral monitoring) use GatewayStack packages as optional peer dependencies. Install them one at a time as you need them — the plugin is a literal onramp to the full GatewayStack platform.
 
 If your agents also connect to external services (GitHub, Slack, Salesforce, APIs), **[GatewayStack](https://github.com/davidcrowe/GatewayStack)** adds the same kind of governance to those connections — JWT-verified identity, policy, and governance across all your integrations.
 

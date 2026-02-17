@@ -180,4 +180,305 @@ describe("validatePolicy", () => {
       expect(redosWarnings).toHaveLength(0);
     });
   });
+
+  // --- outputDlp validation ---
+
+  describe("outputDlp validation", () => {
+    it("accepts a valid outputDlp config", () => {
+      const policy = {
+        ...validPolicy,
+        outputDlp: { enabled: false, mode: "log", redactionMode: "mask", customPatterns: [] },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(true);
+    });
+
+    it("accepts policy without outputDlp (optional)", () => {
+      const result = validatePolicy(validPolicy);
+      expect(result.valid).toBe(true);
+    });
+
+    it("errors when outputDlp is not an object", () => {
+      const policy = { ...validPolicy, outputDlp: "enabled" };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("outputDlp"))).toBe(true);
+    });
+
+    it("errors on non-boolean enabled", () => {
+      const policy = {
+        ...validPolicy,
+        outputDlp: { enabled: "yes", mode: "log", redactionMode: "mask" },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("outputDlp.enabled"))).toBe(true);
+    });
+
+    it("errors on invalid mode", () => {
+      const policy = {
+        ...validPolicy,
+        outputDlp: { enabled: false, mode: "warn", redactionMode: "mask" },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("outputDlp.mode"))).toBe(true);
+    });
+
+    it("errors on invalid redactionMode", () => {
+      const policy = {
+        ...validPolicy,
+        outputDlp: { enabled: false, mode: "log", redactionMode: "hash" },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("outputDlp.redactionMode"))).toBe(true);
+    });
+
+    it("errors when customPatterns is not an array", () => {
+      const policy = {
+        ...validPolicy,
+        outputDlp: { enabled: false, mode: "log", redactionMode: "mask", customPatterns: "SSN" },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("outputDlp.customPatterns"))).toBe(true);
+    });
+
+    it("errors when customPatterns contains non-string", () => {
+      const policy = {
+        ...validPolicy,
+        outputDlp: { enabled: false, mode: "log", redactionMode: "mask", customPatterns: [123] },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("outputDlp.customPatterns[0]"))).toBe(true);
+    });
+  });
+
+  // --- escalation validation ---
+
+  describe("escalation validation", () => {
+    it("accepts a valid escalation config", () => {
+      const policy = {
+        ...validPolicy,
+        escalation: {
+          enabled: false,
+          reviewOnMediumInjection: true,
+          reviewOnFirstToolUse: false,
+          tokenTTLSeconds: 300,
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(true);
+    });
+
+    it("accepts policy without escalation (optional)", () => {
+      const result = validatePolicy(validPolicy);
+      expect(result.valid).toBe(true);
+    });
+
+    it("errors when escalation is not an object", () => {
+      const policy = { ...validPolicy, escalation: true };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("escalation"))).toBe(true);
+    });
+
+    it("errors on non-boolean enabled", () => {
+      const policy = {
+        ...validPolicy,
+        escalation: {
+          enabled: "yes",
+          reviewOnMediumInjection: true,
+          reviewOnFirstToolUse: false,
+          tokenTTLSeconds: 300,
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("escalation.enabled"))).toBe(true);
+    });
+
+    it("errors on non-boolean reviewOnMediumInjection", () => {
+      const policy = {
+        ...validPolicy,
+        escalation: {
+          enabled: false,
+          reviewOnMediumInjection: "yes",
+          reviewOnFirstToolUse: false,
+          tokenTTLSeconds: 300,
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("reviewOnMediumInjection"))).toBe(true);
+    });
+
+    it("errors on non-boolean reviewOnFirstToolUse", () => {
+      const policy = {
+        ...validPolicy,
+        escalation: {
+          enabled: false,
+          reviewOnMediumInjection: true,
+          reviewOnFirstToolUse: 1,
+          tokenTTLSeconds: 300,
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("reviewOnFirstToolUse"))).toBe(true);
+    });
+
+    it("errors on negative tokenTTLSeconds", () => {
+      const policy = {
+        ...validPolicy,
+        escalation: {
+          enabled: false,
+          reviewOnMediumInjection: true,
+          reviewOnFirstToolUse: false,
+          tokenTTLSeconds: -10,
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("tokenTTLSeconds"))).toBe(true);
+    });
+
+    it("errors on non-number tokenTTLSeconds", () => {
+      const policy = {
+        ...validPolicy,
+        escalation: {
+          enabled: false,
+          reviewOnMediumInjection: true,
+          reviewOnFirstToolUse: false,
+          tokenTTLSeconds: "300",
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("tokenTTLSeconds"))).toBe(true);
+    });
+  });
+
+  // --- behavioralMonitoring validation ---
+
+  describe("behavioralMonitoring validation", () => {
+    it("accepts a valid behavioralMonitoring config", () => {
+      const policy = {
+        ...validPolicy,
+        behavioralMonitoring: {
+          enabled: false,
+          spikeThreshold: 3.0,
+          monitoringWindowSeconds: 3600,
+          action: "log",
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(true);
+    });
+
+    it("accepts policy without behavioralMonitoring (optional)", () => {
+      const result = validatePolicy(validPolicy);
+      expect(result.valid).toBe(true);
+    });
+
+    it("errors when behavioralMonitoring is not an object", () => {
+      const policy = { ...validPolicy, behavioralMonitoring: "on" };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("behavioralMonitoring"))).toBe(true);
+    });
+
+    it("errors on non-boolean enabled", () => {
+      const policy = {
+        ...validPolicy,
+        behavioralMonitoring: {
+          enabled: 1,
+          spikeThreshold: 3.0,
+          monitoringWindowSeconds: 3600,
+          action: "log",
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("behavioralMonitoring.enabled"))).toBe(true);
+    });
+
+    it("errors on zero spikeThreshold", () => {
+      const policy = {
+        ...validPolicy,
+        behavioralMonitoring: {
+          enabled: false,
+          spikeThreshold: 0,
+          monitoringWindowSeconds: 3600,
+          action: "log",
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("spikeThreshold"))).toBe(true);
+    });
+
+    it("errors on negative spikeThreshold", () => {
+      const policy = {
+        ...validPolicy,
+        behavioralMonitoring: {
+          enabled: false,
+          spikeThreshold: -1,
+          monitoringWindowSeconds: 3600,
+          action: "log",
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("spikeThreshold"))).toBe(true);
+    });
+
+    it("errors on negative monitoringWindowSeconds", () => {
+      const policy = {
+        ...validPolicy,
+        behavioralMonitoring: {
+          enabled: false,
+          spikeThreshold: 3.0,
+          monitoringWindowSeconds: -1,
+          action: "log",
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("monitoringWindowSeconds"))).toBe(true);
+    });
+
+    it("errors on invalid action", () => {
+      const policy = {
+        ...validPolicy,
+        behavioralMonitoring: {
+          enabled: false,
+          spikeThreshold: 3.0,
+          monitoringWindowSeconds: 3600,
+          action: "warn",
+        },
+      };
+      const result = validatePolicy(policy);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("behavioralMonitoring.action"))).toBe(true);
+    });
+
+    it("accepts all valid action values", () => {
+      for (const action of ["log", "review", "block"]) {
+        const policy = {
+          ...validPolicy,
+          behavioralMonitoring: {
+            enabled: false,
+            spikeThreshold: 3.0,
+            monitoringWindowSeconds: 3600,
+            action,
+          },
+        };
+        const result = validatePolicy(policy);
+        expect(result.valid).toBe(true);
+      }
+    });
+  });
 });

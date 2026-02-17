@@ -43,7 +43,7 @@ cp policy.example.json policy.json
 npm test
 ```
 
-You should see all 14 checks pass:
+You should see all 22 checks pass:
 
 ```
 GatewayStack Governance — Self-Test
@@ -62,11 +62,22 @@ GatewayStack Governance — Self-Test
   ✓ Identity: allows mapped users
   ✓ Audit log path is writable
   ✓ Policy passes schema validation
+  ✓ Injection: catches base64-obfuscated attack
+  ✓ Injection: catches multi-language injection (Chinese)
+  ⊘ DLP: skipped (install @gatewaystack/transformabl-core to enable)
+  ✓ Escalation: classifies HIGH severity correctly
+  ✓ Escalation: generates and approves token
+  ✓ Escalation: MEDIUM severity returns 'MEDIUM'
+  ✓ Injection: catches canary token leak
+  ✓ Behavioral: detectAnomalies returns array when disabled
+  ✓ Behavioral: flags unusual-pattern when no baseline
 
-Results: 14 passed, 0 failed
+Results: 22 passed, 0 failed
 ```
 
-![Self-test: 14 passed, 0 failed](images/02-self-test.png)
+DLP tests show "⊘ skipped" when `@gatewaystack/transformabl-core` isn't installed — this is expected.
+
+![Self-test: 22 passed, 0 failed](images/02-self-test.png)
 
 ## Step 3: See it block something
 
@@ -215,12 +226,82 @@ tail -1 ~/.openclaw/plugins/gatewaystack-governance/audit.jsonl | jq .
 
 You should see a governance check entry showing that the tool call was intercepted, checked, and either allowed or denied — all automatically, without the agent doing anything special.
 
+## Step 8: Enable optional features
+
+The core 5 checks work out of the box with no dependencies. Three additional features can be enabled in `policy.json`:
+
+### Output DLP
+
+Scans tool output for PII (SSNs, API keys, credentials). Requires `@gatewaystack/transformabl-core`:
+
+```bash
+npm install @gatewaystack/transformabl-core
+```
+
+Then in `policy.json`:
+
+```json
+"outputDlp": {
+  "enabled": true,
+  "mode": "log",
+  "redactionMode": "mask"
+}
+```
+
+- `"mode": "log"` — audit PII detections without modifying output
+- `"mode": "block"` — redact PII from output before the agent sees it
+
+### Escalation
+
+Human-in-the-loop review for ambiguous detections. No external dependencies:
+
+```json
+"escalation": {
+  "enabled": true,
+  "reviewOnMediumInjection": true,
+  "reviewOnFirstToolUse": false,
+  "tokenTTLSeconds": 300
+}
+```
+
+When a medium-severity injection is detected, the agent is paused with instructions. Approve in another terminal:
+
+```bash
+gatewaystack-governance approve gw-rev-<token>
+```
+
+### Behavioral monitoring
+
+Detects anomalous tool usage patterns. Requires `@gatewaystack/limitabl-core`:
+
+```bash
+npm install @gatewaystack/limitabl-core
+```
+
+First, build a baseline from your audit history:
+
+```bash
+node scripts/governance-gateway.js --action build-baseline
+```
+
+Then enable monitoring:
+
+```json
+"behavioralMonitoring": {
+  "enabled": true,
+  "spikeThreshold": 3.0,
+  "monitoringWindowSeconds": 3600,
+  "action": "log"
+}
+```
+
 ## What to do next
 
 - **Review the full policy reference** in `references/policy-reference.md` for advanced configuration like custom injection patterns and audit log rotation
 - **Check the audit log regularly** — it's your record of everything every agent did
 - **Tune injection sensitivity** — start at `"medium"` and adjust if you see false positives (`"low"`) or want tighter scanning (`"high"`)
 - **Add custom patterns** — if your organization has specific threats, add regex patterns to `injectionDetection.customPatterns`
+- **Enable optional features** — start with escalation (no deps), then add DLP and behavioral monitoring as needed
 
 ## Troubleshooting
 

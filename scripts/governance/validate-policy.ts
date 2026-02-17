@@ -137,6 +137,76 @@ export function validatePolicy(policy: unknown): PolicyValidationResult {
     errors.push("Missing or invalid 'auditLog' (must be an object)");
   }
 
+  // --- Optional feature sections ---
+
+  if (p.outputDlp !== undefined) {
+    if (typeof p.outputDlp !== "object" || p.outputDlp === null) {
+      errors.push("'outputDlp' must be an object");
+    } else {
+      const dlp = p.outputDlp as Record<string, unknown>;
+      if (typeof dlp.enabled !== "boolean") {
+        errors.push("'outputDlp.enabled' must be a boolean");
+      }
+      if (!["log", "block"].includes(dlp.mode as string)) {
+        errors.push("'outputDlp.mode' must be 'log' or 'block'");
+      }
+      if (!["mask", "remove"].includes(dlp.redactionMode as string)) {
+        errors.push("'outputDlp.redactionMode' must be 'mask' or 'remove'");
+      }
+      if (dlp.customPatterns !== undefined) {
+        if (!Array.isArray(dlp.customPatterns)) {
+          errors.push("'outputDlp.customPatterns' must be an array");
+        } else {
+          for (let i = 0; i < dlp.customPatterns.length; i++) {
+            if (typeof dlp.customPatterns[i] !== "string") {
+              errors.push(`'outputDlp.customPatterns[${i}]' must be a string`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (p.escalation !== undefined) {
+    if (typeof p.escalation !== "object" || p.escalation === null) {
+      errors.push("'escalation' must be an object");
+    } else {
+      const esc = p.escalation as Record<string, unknown>;
+      if (typeof esc.enabled !== "boolean") {
+        errors.push("'escalation.enabled' must be a boolean");
+      }
+      if (typeof esc.reviewOnMediumInjection !== "boolean") {
+        errors.push("'escalation.reviewOnMediumInjection' must be a boolean");
+      }
+      if (typeof esc.reviewOnFirstToolUse !== "boolean") {
+        errors.push("'escalation.reviewOnFirstToolUse' must be a boolean");
+      }
+      if (typeof esc.tokenTTLSeconds !== "number" || (esc.tokenTTLSeconds as number) < 0) {
+        errors.push("'escalation.tokenTTLSeconds' must be a non-negative number");
+      }
+    }
+  }
+
+  if (p.behavioralMonitoring !== undefined) {
+    if (typeof p.behavioralMonitoring !== "object" || p.behavioralMonitoring === null) {
+      errors.push("'behavioralMonitoring' must be an object");
+    } else {
+      const bm = p.behavioralMonitoring as Record<string, unknown>;
+      if (typeof bm.enabled !== "boolean") {
+        errors.push("'behavioralMonitoring.enabled' must be a boolean");
+      }
+      if (typeof bm.spikeThreshold !== "number" || (bm.spikeThreshold as number) <= 0) {
+        errors.push("'behavioralMonitoring.spikeThreshold' must be a positive number");
+      }
+      if (typeof bm.monitoringWindowSeconds !== "number" || (bm.monitoringWindowSeconds as number) < 0) {
+        errors.push("'behavioralMonitoring.monitoringWindowSeconds' must be a non-negative number");
+      }
+      if (!["log", "review", "block"].includes(bm.action as string)) {
+        errors.push("'behavioralMonitoring.action' must be 'log', 'review', or 'block'");
+      }
+    }
+  }
+
   // --- Warnings (non-fatal) ---
 
   // Empty collections
