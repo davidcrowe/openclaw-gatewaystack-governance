@@ -7,3 +7,4 @@ scripts/**/*.js
 scripts/**/*.d.ts
 src/*.js
 src/*.d.ts
+audit-data/nightly/*-disclosure/

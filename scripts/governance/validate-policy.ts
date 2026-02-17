@@ -86,6 +86,28 @@ export function validatePolicy(policy: unknown): PolicyValidationResult {
     if (!["low", "medium", "high"].includes(id.sensitivity as string)) {
       errors.push("'injectionDetection.sensitivity' must be 'low', 'medium', or 'high'");
     }
+    // Validate new optional fields
+    if (id.obfuscationDetection !== undefined && typeof id.obfuscationDetection !== "boolean") {
+      errors.push("'injectionDetection.obfuscationDetection' must be a boolean");
+    }
+    if (id.multiLanguage !== undefined && typeof id.multiLanguage !== "boolean") {
+      errors.push("'injectionDetection.multiLanguage' must be a boolean");
+    }
+    if (id.canaryTokens !== undefined) {
+      if (!Array.isArray(id.canaryTokens)) {
+        errors.push("'injectionDetection.canaryTokens' must be an array of strings");
+      } else {
+        for (let i = 0; i < id.canaryTokens.length; i++) {
+          if (typeof id.canaryTokens[i] !== "string") {
+            errors.push(`'injectionDetection.canaryTokens[${i}]' must be a string`);
+          }
+        }
+        if (id.canaryTokens.length > 100) {
+          warnings.push(`'injectionDetection.canaryTokens' has ${id.canaryTokens.length} entries (>100) — consider reducing for performance`);
+        }
+      }
+    }
+
     // Validate custom patterns
     if (id.customPatterns !== undefined) {
       if (!Array.isArray(id.customPatterns)) {

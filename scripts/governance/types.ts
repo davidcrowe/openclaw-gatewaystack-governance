@@ -16,6 +16,9 @@ export interface Policy {
     enabled: boolean;
     sensitivity: "low" | "medium" | "high";
     customPatterns?: string[];
+    obfuscationDetection?: boolean;
+    multiLanguage?: boolean;
+    canaryTokens?: string[];
   };
   auditLog: {
     path: string;

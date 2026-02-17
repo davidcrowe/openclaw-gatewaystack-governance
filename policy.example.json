@@ -72,7 +72,10 @@
   "injectionDetection": {
     "enabled": true,
     "sensitivity": "medium",
-    "customPatterns": []
+    "customPatterns": [],
+    "obfuscationDetection": true,
+    "multiLanguage": true,
+    "canaryTokens": []
   },
   "auditLog": {
     "path": "audit.jsonl",
